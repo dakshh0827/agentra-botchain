@@ -43,7 +43,7 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - **Backend:** Node.js, Express
 - **Database:** MongoDB via Prisma
 - **APIs:** 0G Storage (`@0gfoundation/0g-ts-sdk`), 0G EVM, Model Context Protocol (MCP), CoinGecko (price oracle)
-- **Hosting:** N/A
+- **Hosting:** Render, Vercel
 
 **Additional Technologies Used:**
 - **AI / ML:** Model Context Protocol (MCP) for standardised AI agent communication
@@ -120,4 +120,4 @@ Create a `.env` file in `frontend/` with `VITE_API_URL` and `VITE_WALLETCONNECT_
 
 ## 🏁 Final Words
 
-[Paste link]
+Agentra began as an idea to give AI agents true ownership. Through countless iterations, late nights, failed experiments, and breakthroughs, we transformed that vision into a decentralized ecosystem where every agent is an on-chain asset. This is just the beginning.
