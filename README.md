@@ -1,9 +1,9 @@
-# 🚀 Agentra
+# Agentra
 ### *You built the agent. We made it an asset.*
 
 <img width="1280" height="800" alt="landing" src="https://github.com/user-attachments/assets/d7909ac5-61e5-45e5-b0e8-b0dd879c7c8c" />
 
-## 📌 Problem & Domain
+## Problem & Domain
 
 AI agents are becoming genuinely useful, but the infrastructure around them is broken in three specific ways:
 
@@ -16,7 +16,7 @@ AI agents are becoming genuinely useful, but the infrastructure around them is b
 **Themes Selected:**
 - Developer Tools & Software Infrastructure
 
-## 🎯 Objective
+## Objective
 
 Agentra is a decentralised platform for AI agents built on the 0G Network. It lets developers publish AI agents as on-chain intelligent NFTs (iNFTs), set their own pricing, and start earning immediately, while users can discover, purchase access to, and execute those agents directly from the browser with payments settled on-chain and no intermediaries.
 
@@ -24,9 +24,7 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - **Pain point:** Centralised gatekeeping, lack of agent composability, and loss of persistent identity/reputation when platforms disappear.
 - **Value provided:** Every agent is minted as an ERC-721 iNFT (true ownership), agents can delegate tasks and pay each other via the Model Context Protocol (composability), metadata is stored on 0G Storage so agents persist even if the platform goes offline (persistence), and a smart contract escrow system settles payments transparently on-chain (economics), with creators receiving 80% of every transaction.
 
-<img width="4096" height="2560" alt="deployStudio" src="https://github.com/user-attachments/assets/ad12652c-35f7-40c7-802a-c1ed4b493a0d" />
-
-## 🧠 Team & Approach
+## Team & Approach
 
 **Team Name:**
 `Agentra`
@@ -35,12 +33,10 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - [Daksh Thakran](https://github.com/dakshh0827) - Full-stack development, backend architecture, databases
 - [Mohit Bharat](https://github.com/immohit64) - Blockchain development, smart contracts
 
-**Your Approach:**
+**Our Approach:**
 - Agentra started as a question: what would it take to turn an AI model into an on-chain asset that earns its creator money without any platform in the middle.
 - Key challenges addressed: access control that works without a trusted server, payments that do not require a custodian, metadata that survives the frontend going offline, and agent communication that does not collapse into a centralised hub.
 - Pivots/iterations/breakthroughs: the escrow pattern for payments came from realising a simple `transfer()` on access purchase would fail silently if the agent endpoint was down, which led to the resolver job. 0G Storage integration replaced IPFS after needing deterministic root hashes referenceable on-chain. The MCP routing layer replaced a custom protocol after realising the spec solved the discovery and invocation problem already being solved manually. The two-contract architecture came last, after thinking through how to upgrade payment logic without destroying already-deployed agents.
-
-<img width="1911" height="952" alt="dashboard" src="https://github.com/user-attachments/assets/d2b2ff57-da11-4a05-b1e7-148cb887ee62" />
 
 ## 🛠️ Tech Stack
 
@@ -63,7 +59,7 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 
 <img width="1280" height="800" alt="explorer" src="https://github.com/user-attachments/assets/1bf9c01c-47d8-4acd-aa1e-46638cf7b6a3" />
 
-## ✨ Key Features
+## Key Features
 
 - ✅ **Agent Deployment (Deploy Studio):** Deploy AI agents as on-chain iNFTs with configurable pricing, schemas, and execution settings.
 - ✅ **Agent Explorer:** Browse, search, and filter all deployed AI agents across the network.
@@ -74,8 +70,10 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 
 ## 📽️ Demo & Deliverables
 
-- **Demo Video Link (Mandatory):** https://youtu.be/JNYf9w4MvW4
-- **Deployment Link (Recommended):** https://agentra.live
+- **Demo Video Link:** https://youtu.be/JNYf9w4MvW4
+- **Deployment Link:** https://agentra.live
+- **Pitch Deck:** https://drive.google.com/file/d/1adm_ifMTUadMY__B9exGjnTaMKgycH94/view?usp=sharing
+- **X/Twitter Profile:** https://x.com/agentra69
 
 **Collaborations:**
 
@@ -87,11 +85,11 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 
 ## ✅ Tasks & Bonus Checklist
 
-- [ ] All team members completed the mandatory social task
-- [ ] Bonus Task 1 – Badge sharing
-- [ ] Bonus Task 2 – Blog/article
+- [✅] All team members completed the mandatory social task
+- [✅] Bonus Task 1 – Badge sharing
+- [✅] Bonus Task 2 – Blog/article
 
-## 🧪 How to Run the Project
+## How to Run the Project
 
 **Requirements:**
 - Node.js 18+
@@ -121,7 +119,7 @@ Create a `.env` file in `backend/` with `PORT`, `NODE_ENV`, `DATABASE_URL`, `RED
 
 Create a `.env` file in `frontend/` with `VITE_API_URL` and `VITE_WALLETCONNECT_PROJECT_ID`.
 
-## 🧬 Future Scope
+## Future Scope
 
 - 📈 **MigrationBridge contract** to move an agent's global registry record from Agentra V1 to a future V2, preserving global ID, access records, and on-chain history.
 - 📈 **Agentra V2 contract** with subscription auto-renewal, tiered access levels, and on-chain governance of platform fee percentages.
@@ -139,6 +137,6 @@ Create a `.env` file in `frontend/` with `VITE_API_URL` and `VITE_WALLETCONNECT_
 - CoinGecko for 0G/USD price data
 - Built during the 0G hackathon
 
-## 🏁 Final Words
+## Final Words
 
 Agentra began as an idea to give AI agents true ownership. Through countless iterations, late nights, failed experiments, and breakthroughs, we transformed that vision into a decentralized ecosystem where every agent is an on-chain asset. This is just the beginning.
