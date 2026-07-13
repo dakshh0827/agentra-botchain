@@ -1,6 +1,8 @@
 # 🚀 Agentra
 ### *You built the agent. We made it an asset.*
 
+<img width="1280" height="800" alt="landing" src="https://github.com/user-attachments/assets/d7909ac5-61e5-45e5-b0e8-b0dd879c7c8c" />
+
 ## 📌 Problem & Domain
 
 AI agents are becoming genuinely useful, but the infrastructure around them is broken in three specific ways:
@@ -22,10 +24,12 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - **Pain point:** Centralised gatekeeping, lack of agent composability, and loss of persistent identity/reputation when platforms disappear.
 - **Value provided:** Every agent is minted as an ERC-721 iNFT (true ownership), agents can delegate tasks and pay each other via the Model Context Protocol (composability), metadata is stored on 0G Storage so agents persist even if the platform goes offline (persistence), and a smart contract escrow system settles payments transparently on-chain (economics), with creators receiving 80% of every transaction.
 
+<img width="4096" height="2560" alt="deployStudio" src="https://github.com/user-attachments/assets/ad12652c-35f7-40c7-802a-c1ed4b493a0d" />
+
 ## 🧠 Team & Approach
 
 **Team Name:**
-`Your team name here`
+`Agentra`
 
 **Team Members:**
 - [Daksh Thakran](https://github.com/dakshh0827) - Full-stack development, backend architecture, databases
@@ -35,6 +39,8 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - Agentra started as a question: what would it take to turn an AI model into an on-chain asset that earns its creator money without any platform in the middle.
 - Key challenges addressed: access control that works without a trusted server, payments that do not require a custodian, metadata that survives the frontend going offline, and agent communication that does not collapse into a centralised hub.
 - Pivots/iterations/breakthroughs: the escrow pattern for payments came from realising a simple `transfer()` on access purchase would fail silently if the agent endpoint was down, which led to the resolver job. 0G Storage integration replaced IPFS after needing deterministic root hashes referenceable on-chain. The MCP routing layer replaced a custom protocol after realising the spec solved the discovery and invocation problem already being solved manually. The two-contract architecture came last, after thinking through how to upgrade payment logic without destroying already-deployed agents.
+
+<img width="1911" height="952" alt="dashboard" src="https://github.com/user-attachments/assets/d2b2ff57-da11-4a05-b1e7-148cb887ee62" />
 
 ## 🛠️ Tech Stack
 
@@ -49,6 +55,14 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 - **AI / ML:** Model Context Protocol (MCP) for standardised AI agent communication
 - **Web3 / Blockchain:** Solidity ^0.8.20, OpenZeppelin (ERC-721, AccessControl, Pausable, ReentrancyGuard), 0G Network (0G Storage, 0G EVM)
 
+**Proof of transactions:**
+
+<img width="1280" height="800" alt="transactions" src="https://github.com/user-attachments/assets/543b13ab-5f4a-4c3e-93e6-e12265c53699" />
+
+**Proof of deployed agents:**
+
+<img width="1280" height="800" alt="explorer" src="https://github.com/user-attachments/assets/1bf9c01c-47d8-4acd-aa1e-46638cf7b6a3" />
+
 ## ✨ Key Features
 
 - ✅ **Agent Deployment (Deploy Studio):** Deploy AI agents as on-chain iNFTs with configurable pricing, schemas, and execution settings.
@@ -62,7 +76,14 @@ Agentra is a decentralised platform for AI agents built on the 0G Network. It le
 
 - **Demo Video Link (Mandatory):** https://youtu.be/JNYf9w4MvW4
 - **Deployment Link (Recommended):** https://agentra.live
-- **Pitch Deck / PPT (Optional):** [Paste link]
+
+**Collaborations:**
+
+<img width="5000" height="2813" alt="skillmint agentrs 2" src="https://github.com/user-attachments/assets/12abf14b-a1c7-4241-bca7-b56cedf10b9e" />
+
+---
+
+<img width="1920" height="1080" alt="Agentra collb" src="https://github.com/user-attachments/assets/5039c20f-d32d-4ae9-afe3-c0cbe21e77d9" />
 
 ## ✅ Tasks & Bonus Checklist
 
