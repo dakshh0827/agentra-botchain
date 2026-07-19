@@ -1,0 +1,12 @@
+{
+  "name": "agentra-cli",
+  "version": "1.0.0",
+  "description": "Agentra developer CLI",
+  "type": "module",
+  "bin": {
+    "agentra": "./bin/agentra.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "agentra-sdk",
+  "version": "1.0.0",
+  "description": "Agentra developer SDK",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
