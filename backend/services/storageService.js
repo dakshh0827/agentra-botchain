@@ -48,6 +48,19 @@ function normalizeRootHash(tx, tree) {
   return rootHash
 }
 
+function extractRootHash(metadataUri) {
+  const value = String(metadataUri || '').trim()
+  if (!value) {
+    throw new Error('Metadata URI is required')
+  }
+
+  if (value.startsWith('0g://')) {
+    return value.slice('0g://'.length)
+  }
+
+  return value
+}
+
 export async function uploadAgentMetadata(metadata) {
   const payload = encoder.encode(JSON.stringify(metadata))
   const memData = new MemData(payload)
@@ -87,4 +100,22 @@ export async function uploadAgentMetadata(metadata) {
     rootHash,
     txHash: tx?.txHash || null,
   }
+}
+
+export async function resolveAgentMetadata(metadataUri) {
+  const rootHash = extractRootHash(metadataUri)
+  const { indexerRpc } = getStorageCredentials()
+  const indexer = new Indexer(indexerRpc)
+  const [blob, err] = await indexer.downloadToBlob(rootHash)
+
+  if (err !== null) {
+    throw new Error(`0G metadata download error: ${err.message}`)
+  }
+
+  const raw = await blob.text()
+  if (!raw.trim()) {
+    throw new Error('0G metadata download returned an empty document')
+  }
+
+  return JSON.parse(raw)
 }

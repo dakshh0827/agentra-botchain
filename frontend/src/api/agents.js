@@ -49,6 +49,9 @@ deploy: (data) =>
       mcpSchema: data.mcpSchema || undefined,
       executionConfig: data.executionConfig || undefined,
       deployMode: data.deployMode || 'database',
+      llmApiKey: data.llmApiKey || undefined,
+      provider: data.provider,
+      providerBaseUrl: data.providerBaseUrl || undefined,
     }),
 
   confirmDeploy: (id, txHash, contractAgentId) =>
@@ -68,6 +71,9 @@ deploy: (data) =>
       isLifetime,
       txHash: txHash || undefined,
     }),
+
+  getLicenseKey: (agentId) =>
+    api.post(`/agents/${agentId}/license`),
 
   // ─────────────────────────────────────────────
   // UPVOTE

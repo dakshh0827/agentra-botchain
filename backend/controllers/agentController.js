@@ -2,11 +2,12 @@ import agentService from '../services/agentService.js'
 import prisma from '../lib/prisma.js'
 import contractManager from '../lib/contractManager.js'
 import config from '../config/config.js'
-import { uploadAgentMetadata } from '../services/storageService.js'
+import { resolveAgentMetadata, uploadAgentMetadata } from '../services/storageService.js'
 import { getAgentAccessState, recordAgentPurchase } from '../services/accessService.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
 import { ethers } from 'ethers'
 import { z } from 'zod'
+import { encryptLlmKey } from '../utils/cryptoKey.js'
 
 const AGENTRA_CONFIRM_EVENT_ABI = [
   'event AgentDeployed(uint256 indexed agentId, address indexed creator, uint8 tier, uint256 listingFeePaidUSD)',
@@ -80,6 +81,9 @@ const deploySchema = z.object({
   executionConfig: executionConfigSchema.optional(),
   deployMode: z.enum(['database', 'blockchain']).optional(),
   status: z.string().optional(),
+  llmApiKey: z.string().min(1).optional(), // creator's LLM key for local-execution support; never stored in manifest
+  provider: z.enum(['anthropic', 'openai', 'groq', 'openai-compatible']).default('anthropic'),
+  providerBaseUrl: z.string().url().optional(), // required only when provider === 'openai-compatible'
 })
 
 const updateSchema = z.object({
@@ -132,11 +136,30 @@ const getAgentById = asyncHandler(async (req, res) => {
   res.json(agent)
 })
 
+const getAgentManifest = asyncHandler(async (req, res) => {
+  const agent = await agentService.getById(req.params.agentId)
+
+  if (!agent?.metadataUri) {
+    return res.status(404).json({ error: 'Agent manifest not found' })
+  }
+
+  const manifest = await resolveAgentMetadata(agent.metadataUri)
+
+console.log('\n====== MANIFEST FETCH ======')
+console.log('Agent ID:', req.params.agentId)
+console.log(JSON.stringify(manifest, null, 2))
+console.log('============================\n')
+
+res.json(manifest)
+})
+
 // ── DEPLOY AGENT (ON-CHAIN + DB) ───────────────────────────
 
 const deployAgent = asyncHandler(async (req, res) => {
   const data = deploySchema.parse(req.body)
   await ensureUniqueAgentName(data.name)
+
+  const encryptedLlmKey = data.llmApiKey ? encryptLlmKey(data.llmApiKey) : null
 
   const metadataPayload = {
     name: data.name,
@@ -152,9 +175,21 @@ const deployAgent = asyncHandler(async (req, res) => {
     mcpSchema: data.mcpSchema || null,
     executionConfig: data.executionConfig || null,
     deployMode: data.deployMode || 'database',
+    provider: data.provider,
+    providerBaseUrl: data.providerBaseUrl || null,
   }
 
+  console.log('\n========== DEPLOY ==========')
+console.log('Provider:', data.provider)
+console.log('Provider Base URL:', data.providerBaseUrl)
+console.log('Metadata Payload:')
+console.log(JSON.stringify(metadataPayload, null, 2))
+console.log('============================\n')
+
   const { metadataUri: metadataURI } = await uploadAgentMetadata(metadataPayload)
+  console.log('\n====== METADATA UPLOADED ======')
+console.log('Metadata URI:', metadataURI)
+console.log('===============================\n')
   const isBlockchain = data.deployMode === 'blockchain'
 
   // For database-only deploys, skip the contract call
@@ -175,6 +210,7 @@ const deployAgent = asyncHandler(async (req, res) => {
       tags: data.tags || [],
       mcpSchema: data.mcpSchema || null,
       executionConfig: data.executionConfig || null,
+      encryptedLlmKey,
       status: 'active',
       txHash: null,
       },
@@ -209,6 +245,7 @@ const deployAgent = asyncHandler(async (req, res) => {
     tags: data.tags || [],
     mcpSchema: data.mcpSchema || null,
     executionConfig: data.executionConfig || null,
+    encryptedLlmKey,
     status: 'draft',
     txHash: null,
     },
@@ -609,6 +646,7 @@ const searchAgents = asyncHandler(async (req, res) => {
 export {
   getAgents,
   getAgentById,
+  getAgentManifest,
   deployAgent,
   confirmDeploy,
   cancelDraft,

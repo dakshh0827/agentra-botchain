@@ -1,6 +1,6 @@
 {
-  "name": "agentra-sdk",
-  "version": "1.0.0",
+  "name": "@agentra-dev/sdk",
+  "version": "1.0.5",
   "description": "Agentra developer SDK",
   "type": "module",
   "main": "./src/index.js",
@@ -9,5 +9,8 @@
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "jose": "^6.2.3"
   }
 }

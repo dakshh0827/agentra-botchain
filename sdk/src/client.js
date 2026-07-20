@@ -305,6 +305,14 @@ export class AgentraClient {
       query: options,
     })
   }
+
+  async getLicenseKey(agentId) {
+    return this.request(`/api/agents/${agentId}/license`, { method: 'POST' })
+  }
+
+  async getAgentManifest(agentId) {
+    return this.request(`/api/agents/${agentId}/manifest`, { auth: false })
+  }
 }
 
 export function createAgentraClient(options) {

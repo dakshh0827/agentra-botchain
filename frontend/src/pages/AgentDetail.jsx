@@ -19,6 +19,7 @@ import AgentCommsPanel from '../components/ui/AgentcommsPanel'
 import OutputRenderer from '../components/ui/OutputRenderer'
 import { useInteractionStore } from '../stores/interactionStore'
 import RuntimeExecutionForm from '../components/execution/Runtimeexecutionform'
+import RunLocallyPanel from '../components/execution/RunLocallyPanel'
 import { agentsAPI } from '../api/agents'
 import { CHAIN_CONFIG } from '../config/chains.config'
 import { getAgentExternalId } from '../utils/helpers'
@@ -1311,6 +1312,12 @@ console.log('========================================\n')
                 <FadeInSection delay={0.1}>
                   <TerminalBox logs={logs} title={userHasAccess ? 'EXECUTION LOG' : 'SYSTEM LOGS'} />
                 </FadeInSection>
+
+                {userHasAccess && (
+                  <FadeInSection delay={0.15}>
+                    <RunLocallyPanel agentId={externalAgentId} />
+                  </FadeInSection>
+                )}
 
               </div>
 

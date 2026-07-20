@@ -1,6 +1,10 @@
 import { zeroGTestnet } from './custom-chains'
 import deployments from '../deployments.json'
 
+const deploymentMap = Array.isArray(deployments)
+  ? Object.assign({}, ...deployments)
+  : deployments
+
 // Wagmi supports both Zero Gravity chains.
 export const SUPPORTED_CHAINS = [zeroGTestnet]
 
@@ -8,7 +12,7 @@ export const SUPPORTED_CHAINS = [zeroGTestnet]
 export const CHAIN_CONFIG = SUPPORTED_CHAINS.reduce((acc, chain) => {
   acc[chain.id] = {
     chain,
-    contracts: deployments[chain.id] || {},
+    contracts: deploymentMap[chain.id] || {},
   }
 
   return acc

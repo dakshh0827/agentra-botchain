@@ -255,6 +255,9 @@ export default function DeployStudio() {
     name: '',
     category: '',
     endpoint: '',
+    llmApiKey: '',
+    provider: 'anthropic',
+    providerBaseUrl: '',
     mcpSchema: '',
     description: '',
     tags: '',
@@ -271,6 +274,8 @@ export default function DeployStudio() {
       bodyFields: [],
     },
   })
+
+  const [showLlmKey, setShowLlmKey] = useState(false)
 
   const update = (key, val) => setForm(f => ({ ...f, [key]: val }))
   const isBlockchain = form.deployMode === 'blockchain'
@@ -369,6 +374,9 @@ export default function DeployStudio() {
           : '0',
         deployMode: form.deployMode,
         executionConfig: hasExecConfig ? form.executionConfig : undefined,
+        llmApiKey: form.llmApiKey || undefined,
+        provider: form.provider,
+        providerBaseUrl: form.provider === 'openai-compatible' ? form.providerBaseUrl : undefined,
       }
 
       // ── DATABASE ONLY ──
@@ -693,6 +701,28 @@ export default function DeployStudio() {
                     <Globe size={20} className="text-primary" /> MCP Endpoint
                   </h2>
                   <InputField label="ENDPOINT URL" field="endpoint" placeholder="https://your-agent.example.com" form={form} update={update} />
+                  <div>
+                    <label className="text-xs text-text-dim block mb-1">LLM API KEY (for local execution)</label>
+                    <div className="relative">
+                      <input type={showLlmKey ? 'text' : 'password'} value={form.llmApiKey} onChange={e => update('llmApiKey', e.target.value)}
+                        placeholder="sk-... (optional — enables buyers to run this agent locally)" className="input-field w-full px-3 py-2 rounded-lg text-sm pr-8" />
+                      <button type="button" onClick={() => setShowLlmKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-secondary cursor-pointer">
+                        {showLlmKey ? <EyeOff size={12} /> : <Eye size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-text-dim block mb-1">LLM PROVIDER</label>
+                    <select value={form.provider} onChange={e => update('provider', e.target.value)} className="input-field w-full px-3 py-2 rounded-lg text-sm">
+                      <option value="anthropic">Anthropic</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="groq">Groq</option>
+                      <option value="openai-compatible">Other (OpenAI-compatible endpoint)</option>
+                    </select>
+                  </div>
+                  {form.provider === 'openai-compatible' && (
+                    <InputField label="PROVIDER BASE URL" field="providerBaseUrl" placeholder="https://api.your-provider.com/v1" form={form} update={update} />
+                  )}
                   <InputField label="MCP SCHEMA (JSON — optional)" field="mcpSchema" rows={8} placeholder={'{\n  "name": "my-agent",\n  "version": "1.0.0",\n  "tools": []\n}'} form={form} update={update} />
                 </div>
               )}

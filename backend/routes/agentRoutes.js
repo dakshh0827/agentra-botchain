@@ -3,6 +3,7 @@ import multer from 'multer'
 import {
   getAgents,
   getAgentById,
+  getAgentManifest,
   deployAgent,
   confirmDeploy,
   cancelDraft,
@@ -22,6 +23,8 @@ import { deployLimiter } from '../middlewares/rateLimiter.js'
 import { getAgentMetrics } from '../controllers/analyticsController.js'
 import { getReviews, createReview } from '../controllers/reviewController.js'
 import { callAgent, discoverAgents, getCommsTarget, getMessages } from '../controllers/agentCommsController.js'
+import { issueLicenseKey } from '../services/licenseService.js'
+import { getRuntimeKey } from '../services/runtimeKeyService.js'
 
 const upload = multer({ storage: multer.memoryStorage() })
 
@@ -36,6 +39,7 @@ router.get('/search', searchAgents)
 router.get('/discover', authMiddleware, discoverAgents)
 router.get('/comms-target', authMiddleware, getCommsTarget)
 router.get('/:agentId/metrics', getAgentMetrics)
+router.get('/:agentId/manifest', optionalAuth, getAgentManifest)
 
 // ─────────────────────────────────────────────
 // WEB3 ACTIONS (PROTECTED)
@@ -77,5 +81,25 @@ router.post('/:agentId/reviews', authMiddleware, createReview)
 // Update / Delete
 router.put('/:id', authMiddleware, updateAgent)
 router.delete('/:id', authMiddleware, deleteAgent)
+
+// Offline license key issuance
+router.post('/:id/license', authMiddleware, async (req, res, next) => {
+  try {
+    res.json(await issueLicenseKey(req.params.id, req.walletAddress))
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Runtime LLM key fetch — license JWT itself is the credential, no wallet auth needed
+router.post('/:agentId/runtime-key', async (req, res, next) => {
+  try {
+    const licenseToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    if (!licenseToken) return res.status(401).json({ error: 'Missing license token' })
+    res.json(await getRuntimeKey(req.params.agentId, licenseToken))
+  } catch (err) {
+    next(err)
+  }
+})
 
 export default router
