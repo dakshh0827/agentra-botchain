@@ -143,6 +143,8 @@ const getAgentManifest = asyncHandler(async (req, res) => {
     return res.status(404).json({ error: 'Agent manifest not found' })
   }
 
+  console.log("Metadata URI:", agent.metadataUri);
+
   const manifest = await resolveAgentMetadata(agent.metadataUri)
 
 console.log('\n====== MANIFEST FETCH ======')

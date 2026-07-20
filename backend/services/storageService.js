@@ -117,5 +117,7 @@ export async function resolveAgentMetadata(metadataUri) {
     throw new Error('0G metadata download returned an empty document')
   }
 
+  console.log("Resolving:", metadataUri);
+
   return JSON.parse(raw)
 }

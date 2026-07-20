@@ -91,7 +91,7 @@ async function loadAgentsPayload(options) {
 
 async function ensureClient(options = {}) {
   const stored = await loadConfig()
-  const baseUrl = options.baseUrl || process.env.AGENTRA_BASE_URL || stored.baseUrl || 'http://localhost:5001'
+  const baseUrl = options.baseUrl || process.env.AGENTRA_BASE_URL || stored.baseUrl || 'https://agentra-0g.onrender.com'
   const walletAddress = options.address || process.env.AGENTRA_WALLET_ADDRESS || stored.walletAddress || null
 
   return createAgentraClient({
@@ -103,7 +103,7 @@ async function ensureClient(options = {}) {
 
 async function handleLogin(options) {
   let address = options.address || process.env.AGENTRA_WALLET_ADDRESS
-  let baseUrl = options['base-url'] || process.env.AGENTRA_BASE_URL || 'http://localhost:5001'
+  let baseUrl = options['base-url'] || process.env.AGENTRA_BASE_URL || 'https://agentra-0g.onrender.com'
 
   if (!address) {
     address = await prompt('Wallet address')
@@ -362,7 +362,7 @@ export async function runCli(argv = process.argv.slice(2)) {
   if (command === 'whoami') {
     const config = await loadConfig()
     printJson({
-      baseUrl: config.baseUrl || process.env.AGENTRA_BASE_URL || 'http://localhost:5001',
+      baseUrl: config.baseUrl || process.env.AGENTRA_BASE_URL || 'https://agentra-0g.onrender.com',
       walletAddress: config.walletAddress || process.env.AGENTRA_WALLET_ADDRESS || null,
       configPath: getConfigLocation(),
     })

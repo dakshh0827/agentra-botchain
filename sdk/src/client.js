@@ -50,7 +50,7 @@ async function parseResponseBody(response) {
 
 export class AgentraClient {
   constructor(options = {}) {
-    const baseUrl = options.baseUrl || process.env.AGENTRA_BASE_URL || 'http://localhost:5001'
+    const baseUrl = options.baseUrl || process.env.AGENTRA_BASE_URL || 'https://agentra-0g.onrender.com'
 
     this.baseUrl = String(baseUrl).replace(/\/$/, '')
     this.walletAddress = options.walletAddress || options.address || process.env.AGENTRA_WALLET_ADDRESS || null
