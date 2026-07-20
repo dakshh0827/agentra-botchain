@@ -18,6 +18,13 @@ function toDevMetadataFallback(metadata, payload) {
 function getStorageCredentials() {
   const { rpcUrl, indexerRpc, privateKey } = config.storage
 
+  console.log("0G Storage Config:", {
+    rpcUrl,
+    indexerRpc,
+    hasPrivateKey: !!privateKey,
+  });
+
+
   if (!rpcUrl) {
     throw new Error('0G storage RPC URL is not configured')
   }
@@ -95,6 +102,12 @@ export async function uploadAgentMetadata(metadata) {
 
   const rootHash = normalizeRootHash(tx, tree)
 
+  console.log("UPLOAD CONFIG");
+console.log({
+  rpcUrl,
+  indexerRpc,
+});
+
   return {
     metadataUri: `0g://${rootHash}`,
     rootHash,
@@ -109,7 +122,10 @@ export async function resolveAgentMetadata(metadataUri) {
   const [blob, err] = await indexer.downloadToBlob(rootHash)
 
   if (err !== null) {
-    throw new Error(`0G metadata download error: ${err.message}`)
+    console.error("0G DOWNLOAD ERROR");
+console.error(err);
+
+throw new Error(`0G metadata download error: ${err.message}`);
   }
 
   const raw = await blob.text()
@@ -118,6 +134,10 @@ export async function resolveAgentMetadata(metadataUri) {
   }
 
   console.log("Resolving:", metadataUri);
+  console.log("DOWNLOAD CONFIG");
+console.log({
+  indexerRpc,
+});
 
   return JSON.parse(raw)
 }
