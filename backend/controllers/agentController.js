@@ -7,7 +7,7 @@ import { getAgentAccessState, recordAgentPurchase } from '../services/accessServ
 import { asyncHandler } from '../middlewares/errorHandler.js'
 import { ethers } from 'ethers'
 import { z } from 'zod'
-import { encryptLlmKey } from '../utils/cryptoKey.js'
+import { encryptLlmKey as encryptSecretValue } from '../utils/cryptoKey.js'
 
 const AGENTRA_CONFIRM_EVENT_ABI = [
   'event AgentDeployed(uint256 indexed agentId, address indexed creator, uint8 tier, uint256 listingFeePaidUSD)',
@@ -44,6 +44,8 @@ const executionHeaderFieldSchema = z.object({
 const executionBodyFieldSchema = z.object({
   key: z.string().min(1).max(100).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Key must be a valid identifier'),
   type: executionFieldTypeSchema,
+  value: z.string().optional(),
+  secret: z.boolean().optional().default(false),
   required: z.boolean(),
   userProvided: z.boolean(),
   placeholder: z.string().optional(),
@@ -81,9 +83,6 @@ const deploySchema = z.object({
   executionConfig: executionConfigSchema.optional(),
   deployMode: z.enum(['database', 'blockchain']).optional(),
   status: z.string().optional(),
-  llmApiKey: z.string().min(1).optional(), // creator's LLM key for local-execution support; never stored in manifest
-  provider: z.enum(['anthropic', 'openai', 'groq', 'openai-compatible']).default('anthropic'),
-  providerBaseUrl: z.string().url().optional(), // required only when provider === 'openai-compatible'
 })
 
 const updateSchema = z.object({
@@ -97,6 +96,26 @@ const updateSchema = z.object({
   tags: z.array(z.string()).optional(),
   category: z.enum(['Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']).optional(),
 })
+
+function encryptExecutionConfigSecrets(executionConfig) {
+  if (!executionConfig) return executionConfig
+  const encryptField = (f) => (f.secret && !f.userProvided && f.value) ? { ...f, value: encryptSecretValue(f.value) } : f
+  return {
+    ...executionConfig,
+    headers: (executionConfig.headers || []).map(encryptField),
+    bodyFields: (executionConfig.bodyFields || []).map(encryptField),
+  }
+}
+
+function stripExecutionConfigSecrets(executionConfig) {
+  if (!executionConfig) return executionConfig
+  const stripField = (f) => (f.secret && !f.userProvided) ? { ...f, value: undefined } : f
+  return {
+    ...executionConfig,
+    headers: (executionConfig.headers || []).map(stripField),
+    bodyFields: (executionConfig.bodyFields || []).map(stripField),
+  }
+}
 
 async function ensureUniqueAgentName(name, excludeAgentId = null) {
   const existing = await prisma.agent.findFirst({
@@ -161,7 +180,7 @@ const deployAgent = asyncHandler(async (req, res) => {
   const data = deploySchema.parse(req.body)
   await ensureUniqueAgentName(data.name)
 
-  const encryptedLlmKey = data.llmApiKey ? encryptLlmKey(data.llmApiKey) : null
+  const encryptedExecutionConfig = encryptExecutionConfigSecrets(data.executionConfig)
 
   const metadataPayload = {
     name: data.name,
@@ -175,15 +194,11 @@ const deployAgent = asyncHandler(async (req, res) => {
     commsEnabled: data.commsEnabled ?? false,
     commsPricePerCall: data.commsPricePerCall || '0',
     mcpSchema: data.mcpSchema || null,
-    executionConfig: data.executionConfig || null,
+    executionConfig: stripExecutionConfigSecrets(data.executionConfig) || null,
     deployMode: data.deployMode || 'database',
-    provider: data.provider,
-    providerBaseUrl: data.providerBaseUrl || null,
   }
 
   console.log('\n========== DEPLOY ==========')
-console.log('Provider:', data.provider)
-console.log('Provider Base URL:', data.providerBaseUrl)
 console.log('Metadata Payload:')
 console.log(JSON.stringify(metadataPayload, null, 2))
 console.log('============================\n')
@@ -211,8 +226,7 @@ console.log('===============================\n')
       category: data.category,
       tags: data.tags || [],
       mcpSchema: data.mcpSchema || null,
-      executionConfig: data.executionConfig || null,
-      encryptedLlmKey,
+      executionConfig: encryptedExecutionConfig || null,
       status: 'active',
       txHash: null,
       },
@@ -246,8 +260,7 @@ console.log('===============================\n')
     category: data.category,
     tags: data.tags || [],
     mcpSchema: data.mcpSchema || null,
-    executionConfig: data.executionConfig || null,
-    encryptedLlmKey,
+    executionConfig: encryptedExecutionConfig || null,
     status: 'draft',
     txHash: null,
     },

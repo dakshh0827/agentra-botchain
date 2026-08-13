@@ -124,7 +124,6 @@ model Agent {
 
   mcpSchema       Json?
   executionConfig Json?
-  encryptedLlmKey String?       // AES-256-GCM ciphertext "iv:authTag:data" (hex), server-managed key only
   isVerified      Boolean       @default(false)
 
   createdAt       DateTime      @default(now())

@@ -1,6 +1,6 @@
 {
   "name": "@agentra-dev/sdk",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Agentra developer SDK",
   "type": "module",
   "main": "./src/index.js",
