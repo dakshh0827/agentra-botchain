@@ -1,5 +1,6 @@
 export async function fetchRuntimeSecrets(baseUrl, agentId, licenseToken) {
-  const res = await fetch(`${baseUrl}/agents/${agentId}/runtime-secrets`, {
+  const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '')
+  const res = await fetch(`${normalizedBaseUrl}/api/agents/${agentId}/runtime-secrets`, {
     method: 'POST',
     headers: { authorization: `Bearer ${licenseToken}` },
   })
