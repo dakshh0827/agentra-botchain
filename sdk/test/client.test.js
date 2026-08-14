@@ -59,6 +59,12 @@ test('AgentraClient can call auth and execution endpoints', async () => {
         body: JSON.stringify({ success: true, agentId: 'agent-1', response: 'world' }),
       }
     },
+    'POST /api/agents/agent-1/license': async ({ req }) => {
+      assert.equal(req.headers['x-wallet-address'], '0x1234567890123456789012345678901234567890')
+      return {
+        body: JSON.stringify({ licenseKey: 'license-1', expiresAt: '2099-01-01T00:00:00.000Z' }),
+      }
+    },
   })
 
   try {
@@ -72,6 +78,31 @@ test('AgentraClient can call auth and execution endpoints', async () => {
     const result = await client.executeAgent('agent-1', { task: 'hello' })
     assert.equal(result.success, true)
     assert.equal(result.response, 'world')
+
+    const license = await client.getLicenseKey('agent-1')
+    assert.equal(license.licenseKey, 'license-1')
+  } finally {
+    mock.server.close()
+  }
+})
+
+test('AgentraClient can fetch license with per-call wallet override', async () => {
+  const mock = await startMockServer({
+    'POST /api/agents/agent-1/license': async ({ req }) => {
+      assert.equal(req.headers['x-wallet-address'], '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd')
+      return {
+        body: JSON.stringify({ licenseKey: 'license-2', expiresAt: '2099-01-01T00:00:00.000Z' }),
+      }
+    },
+  })
+
+  try {
+    const client = new AgentraClient({ baseUrl: mock.baseUrl })
+    const license = await client.getLicenseKey('agent-1', {
+      walletAddress: '0xABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD',
+    })
+
+    assert.equal(license.licenseKey, 'license-2')
   } finally {
     mock.server.close()
   }
@@ -89,7 +120,9 @@ test('AgentraClient surfaces HTTP errors', async () => {
     const client = new AgentraClient({ baseUrl: mock.baseUrl, walletAddress: '0x1234567890123456789012345678901234567890' })
     await assert.rejects(
       () => client.executeAgent('agent-1', { task: 'hello' }),
-      (error) => error instanceof AgentraRequestError && error.status === 403
+      (error) => error instanceof AgentraRequestError
+        && error.status === 403
+        && String(error.message).includes('Access not purchased')
     )
   } finally {
     mock.server.close()
