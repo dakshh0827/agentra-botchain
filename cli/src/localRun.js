@@ -6,6 +6,16 @@ import { loadConfig, saveConfig } from './storage.js'
 import { prompt } from './prompts.js'
 import { buildLocalRequest } from './requestBuilder.js'
 
+// Deploy forms often mislabel numeric fields as type "text", but the downstream
+// agent's JSON schema still requires a real number — send digit-only strings as
+// numbers so schema validation ("age must be a positive number") doesn't reject
+// them. Leading-zero strings (zip codes, IDs) are left as-is since Number() would
+// silently drop the zero.
+function coerceNumericLike(raw) {
+  if (!/^-?\d+(\.\d+)?$/.test(raw) || /^-?0\d/.test(raw)) return raw
+  return Number(raw)
+}
+
 function resolveWalletAddress(config, options = {}) {
   const candidate = options.address || process.env.AGENTRA_WALLET_ADDRESS || config.walletAddress || null
   return candidate ? String(candidate).trim().toLowerCase() : null
@@ -72,14 +82,16 @@ export async function handleRun(agentId, options) {
       }
     } else {
       const raw = await prompt(`${f.description || f.key}${f.required ? ' (required)' : ' (optional)'}`, f.placeholder || '')
-      body[f.key] = f.type === 'boolean' ? (raw === 'true' || raw === 'yes') : f.type === 'number' ? Number(raw) : raw
+      body[f.key] = f.type === 'boolean' ? (raw === 'true' || raw === 'yes')
+        : f.type === 'number' ? Number(raw)
+        : coerceNumericLike(raw)
     }
   }
 
   const req = buildLocalRequest(manifest.endpoint, executionConfig, { headers, body, fileNames }, options.task)
   const res = await fetch(req.url, { method: req.method, headers: req.headers, body: req.body })
   const data = await res.json().catch(() => null)
-  console.log(data ?? (await res.text()))
+  console.log(data ? JSON.stringify(data, null, 2) : await res.text())
 }
 
 async function getOrFetchManifest(agentId, config) {
