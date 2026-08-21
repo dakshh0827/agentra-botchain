@@ -135,7 +135,7 @@ async function ensureUniqueAgentName(name, excludeAgentId = null) {
 // ── Controllers ───────────────────────────────────────────────
 
 const getAgents = asyncHandler(async (req, res) => {
-  const { category, search, status, sortBy, page, limit, mine } = req.query
+  const { category, search, status, sortBy, page, limit, mine, official } = req.query
 
   const result = await agentService.getAgents({
     category: category === 'all' ? undefined : category,
@@ -145,6 +145,7 @@ const getAgents = asyncHandler(async (req, res) => {
     page: parseInt(page) || 1,
     limit: Math.min(parseInt(limit) || 20, 100),
     ownerWallet: mine === 'true' ? req.walletAddress : undefined,
+    official: official === 'true' ? true : undefined,
   })
 
   res.json(result)

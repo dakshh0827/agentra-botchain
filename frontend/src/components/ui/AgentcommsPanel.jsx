@@ -60,7 +60,7 @@ const extractReadableText = (payload) => {
 function DiscoveryResult({ agent, onSelect, selected }) {
   return (
     <motion.div
-      whileHover={{ scale: 1.01 }}
+     
       whileTap={{ scale: 0.99 }}
       onClick={() => onSelect(agent)}
       className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${

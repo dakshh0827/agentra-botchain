@@ -561,7 +561,7 @@ export default function DeployStudio() {
                 return (
                   <React.Fragment key={`${s.label}-${i}`}>
                     <motion.div
-                      whileHover={isDone ? { y: -2, scale: 1.02 } : {}}
+                      
                       onClick={() => isDone && setStep(stepIndex)}
                       className={`relative flex items-center gap-2.5 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-all shrink-0 ${isDone ? 'cursor-pointer' : ''} ${
                         isActive
@@ -637,7 +637,7 @@ export default function DeployStudio() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 sm:gap-5">
                     {/* Blockchain */}
-                    <motion.button whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.99 }}
+                    <motion.button 
                       onClick={() => update('deployMode', 'blockchain')}
                       className={`relative p-5 sm:p-6 rounded-2xl border text-left transition-all cursor-pointer overflow-hidden ${
                         isBlockchain ? 'bg-[rgba(124,58,237,0.1)] border-[rgba(124,58,237,0.5)]' : 'border-border hover:border-[rgba(124,58,237,0.3)] bg-bg-secondary'
@@ -671,7 +671,7 @@ export default function DeployStudio() {
                     <label className="text-xs font-mono text-text-dim uppercase block mb-3">CATEGORY</label>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                       {CATEGORIES.map(cat => (
-                        <motion.button key={cat} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                        <motion.button key={cat} 
                           onClick={() => update('category', cat)}
                           className={`py-2.5 px-4 rounded-xl text-sm font-mono border transition-all cursor-pointer ${
                             form.category === cat
@@ -725,7 +725,7 @@ export default function DeployStudio() {
                     <label className="text-xs font-mono text-text-dim uppercase block mb-3">SELECT TIER</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {TIER_OPTIONS.map(tier => (
-                        <motion.button key={tier.tier} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }}
+                        <motion.button key={tier.tier} 
                           onClick={() => {
                             update('tier', tier.tier)
                             update('tierIndex', tier.tierIndex)
@@ -1075,13 +1075,13 @@ export default function DeployStudio() {
         {!deployed && (
           <FadeInSection delay={0.1}>
             <div className="flex justify-between mt-6 gap-4">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div >
                 <NeonButton variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || deploying}>
                   ← BACK
                 </NeonButton>
               </motion.div>
               {step < 7 && (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <motion.div >
                   <NeonButton
                     icon={ChevronRight}
                     onClick={() => setStep(s => Math.min(7, s + 1))}

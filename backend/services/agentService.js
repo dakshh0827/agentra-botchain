@@ -131,8 +131,11 @@ class AgentService {
     page = 1,
     limit = 20,
     ownerWallet,
+    official,
   } = {}) {
     const where = {}
+
+    if (official === true) where.isOfficial = true
 
     if (status && status !== 'all') {
       where.status = status

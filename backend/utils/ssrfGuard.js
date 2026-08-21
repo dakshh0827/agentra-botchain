@@ -31,6 +31,11 @@ export async function assertSafeUrl(rawUrl) {
     throw Object.assign(new Error('Only http/https endpoints are allowed'), { status: 400 })
   }
 
+
+  if (process.env.ALLOW_LOCAL_AGENT_ENDPOINTS === 'true') {
+    return
+  }
+
   const hostname = parsed.hostname
 
   if (BLOCKED_HOSTNAMES.has(hostname)) {

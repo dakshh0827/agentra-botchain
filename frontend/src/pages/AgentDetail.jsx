@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import AgentAvatar from '../components/ui/AgentAvatar'
 import { useParams, Link } from 'react-router-dom'
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
@@ -365,7 +366,7 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
         setPriceLoading(false)
       }
     })()
-  }, [contracts?.Agentra?.address, agent.contractAgentId, publicClient])
+  }, [contracts?.Agentra?.address, contracts?.Agentra?.abi, agent.contractAgentId, publicClient])
 
   const monthlyEth = parseFloat(formatUnits(requiredWei.monthly ?? 0n, 18)).toFixed(6)
   const yearlyEth = parseFloat(formatUnits(requiredWei.yearly ?? 0n, 18)).toFixed(6)
@@ -470,7 +471,7 @@ function BlockchainPurchasePanel({ agent, onSuccess, pendingTx }) {
         setPriceLoading(false)
       }
     })()
-  }, [contracts?.Agentra?.address, agent.contractAgentId, publicClient])
+  }, [contracts?.Agentra?.address, contracts?.Agentra?.abi, agent.contractAgentId, publicClient])
 
   const monthlyEth = parseFloat(formatUnits(requiredWei.monthly ?? 0n, 18)).toFixed(6)
   const yearlyEth = parseFloat(formatUnits(requiredWei.yearly ?? 0n, 18)).toFixed(6)
@@ -580,7 +581,7 @@ function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth,
 // UPVOTE BUTTON
 // ─────────────────────────────────────────────────────────────
 
-function UpvoteButton({ agentId, contractAgentId, ownerWallet, initialUpvotes, walletAddress, isConnected }) {
+function UpvoteButton({ agentId, ownerWallet, initialUpvotes, walletAddress, isConnected }) {
   // New contract has no upvote() function — track upvotes DB-only
   // Still require wallet connection but no on-chain tx needed
   const [hasUpvoted, setHasUpvoted] = useState(false)
@@ -658,6 +659,171 @@ function UpvoteButton({ agentId, contractAgentId, ownerWallet, initialUpvotes, w
   )
 }
 
+function EndpointEditor({ agent, onRefresh }) {
+  const agentKey = getAgentExternalId(agent)
+  const [endpoint, setEndpoint] = useState(agent?.endpoint || '')
+  const [saving, setSaving] = useState(false)
+  const [probing, setProbing] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [probeNote, setProbeNote] = useState('')
+
+  useEffect(() => {
+    setEndpoint(agent?.endpoint || '')
+  }, [agent?.endpoint])
+
+  const cleanEndpoint = (raw) => {
+    const trimmed = (raw || '').trim().replace(/\/+$/, '')
+    if (!trimmed) return { error: 'Endpoint is required' }
+    let url
+    try {
+      url = new URL(trimmed)
+    } catch {
+      return { error: 'Not a valid URL' }
+    }
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return { error: 'Endpoint must start with http:// or https://' }
+    }
+    if (/\/(execute|apply)\/?$/i.test(url.pathname)) {
+      return { error: 'Drop /execute or /apply — Agentra appends that itself.' }
+    }
+    return { value: trimmed }
+  }
+
+  const handleProbe = async () => {
+    const checked = cleanEndpoint(endpoint)
+    if (checked.error) {
+      setError(checked.error)
+      setProbeNote('')
+      return
+    }
+    setProbing(true)
+    setError('')
+    setProbeNote('')
+    try {
+      const res = await agentsAPI.validateEndpoint(checked.value)
+      if (res.data?.valid) {
+        setProbeNote(`Reachable — ${res.data.url || checked.value} answered ${res.data.status}`)
+      } else {
+        setProbeNote(res.data?.error || 'Endpoint unreachable (service may be asleep)')
+      }
+    } catch (e) {
+      setProbeNote(e?.response?.data?.error || e?.message || 'Probe failed')
+    } finally {
+      setProbing(false)
+    }
+  }
+
+  const handleSave = async ({ force = false } = {}) => {
+    const checked = cleanEndpoint(endpoint)
+    if (checked.error) {
+      setError(checked.error)
+      setSuccess('')
+      return
+    }
+    if (checked.value === (agent?.endpoint || '').replace(/\/+$/, '')) {
+      setSuccess('Already pointing at this URL')
+      setError('')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (!force) {
+        const probe = await agentsAPI.validateEndpoint(checked.value)
+        if (!probe.data?.valid) {
+          setError(
+            `${probe.data?.error || 'Unreachable'}. Fix the URL, or save anyway if the service is still waking up.`,
+          )
+          setSaving(false)
+          return
+        }
+        setProbeNote(`Reachable — ${probe.data.url || checked.value} answered ${probe.data.status}`)
+      }
+
+      await agentsAPI.update(agentKey, { endpoint: checked.value })
+      setSuccess('Endpoint updated')
+      onRefresh?.()
+    } catch (e) {
+      setError(e?.response?.data?.error || e?.message || 'Update failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 pt-1">
+      <div className="text-xs font-mono text-[var(--color-text-dim)] uppercase">Agent endpoint</div>
+      <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
+        Public base URL of the running agent (no trailing <span className="font-mono">/execute</span>).
+        Report downloads are served from this host.
+      </p>
+      <input
+        type="url"
+        value={endpoint}
+        onChange={(e) => {
+          setEndpoint(e.target.value)
+          setError('')
+          setSuccess('')
+        }}
+        placeholder="https://your-agent.example.com"
+        className="input-field w-full px-3 py-2 rounded-lg text-sm font-mono"
+      />
+      {probeNote && (
+        <p className="text-[11px] font-mono text-[var(--color-text-secondary)]">{probeNote}</p>
+      )}
+      {error && (
+        <div className="space-y-2">
+          <div className="flex items-start gap-2 text-[var(--color-danger)] text-xs p-2 rounded-lg bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.2)]">
+            <AlertCircle size={12} className="shrink-0 mt-0.5" /> {error}
+          </div>
+          {/unreachable|asleep|waking|Could not reach|timed out/i.test(error) && (
+            <button
+              type="button"
+              onClick={() => handleSave({ force: true })}
+              disabled={saving}
+              className="text-[11px] font-mono text-amber-300/90 underline underline-offset-2 cursor-pointer disabled:opacity-40"
+            >
+              Save anyway
+            </button>
+          )}
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 text-[var(--color-success)] text-xs p-2 rounded-lg bg-[rgba(52,211,153,0.08)] border border-[rgba(52,211,153,0.2)]">
+          <CheckCircle size={12} className="shrink-0" /> {success}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleProbe}
+          disabled={probing || saving || !endpoint.trim()}
+          className="flex-1 min-w-28 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[var(--color-border)]
+                     text-[var(--color-text-secondary)] text-xs font-mono hover:border-primary hover:text-primary
+                     disabled:opacity-40 transition-all cursor-pointer"
+        >
+          {probing ? <Loader2 size={13} className="animate-spin" /> : <Activity size={13} />}
+          {probing ? 'CHECKING…' : 'TEST HEALTH'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSave({ force: false })}
+          disabled={saving || probing || !endpoint.trim()}
+          className="flex-1 min-w-28 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[var(--color-primary)]
+                     text-[var(--color-primary)] text-xs font-mono hover:bg-[rgba(124,58,237,0.1)]
+                     disabled:opacity-40 transition-all cursor-pointer"
+        >
+          {saving ? <Loader2 size={13} className="animate-spin" /> : <ExternalLink size={13} />}
+          {saving ? 'SAVING…' : 'SAVE ENDPOINT'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync, onRefresh }) {
   const [monthlyUSD, setMonthlyUSD] = useState('')
   const [commsUSD, setCommsUSD] = useState('')
@@ -666,21 +832,21 @@ function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync
   const [savingComms, setSavingComms] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
- 
+
   useEffect(() => {
     setCommsEnabled(agent?.commsEnabled ?? false)
   }, [agent?.commsEnabled])
- 
+
   if (!agent?.contractAgentId) {
-    // DB-only agent — update via API only
     return (
       <div className="glass-card-landing rounded-xl p-5 sm:p-6 space-y-4">
         <h3 className="font-semibold text-sm text-[var(--color-text-dim)] uppercase flex items-center gap-2">
           <Shield size={13} className="text-[var(--color-primary)]" /> Owner Controls
         </h3>
         <p className="text-xs text-[var(--color-text-dim)] font-mono">
-          This is a database-only agent. Update pricing and comms via the agent settings.
+          Database-only agent — endpoint updates here; on-chain pricing is not available.
         </p>
+        <EndpointEditor agent={agent} onRefresh={onRefresh} />
       </div>
     )
   }
@@ -761,9 +927,11 @@ function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync
           <CheckCircle size={12} className="shrink-0" /> {success}
         </div>
       )}
- 
+
+      <EndpointEditor agent={agent} onRefresh={onRefresh} />
+
       {/* Update pricing */}
-      <div className="space-y-3">
+      <div className="space-y-3 pt-3 border-t border-[var(--color-border)]">
         <div className="text-xs font-mono text-[var(--color-text-dim)] uppercase">Update Pricing (USD, 18 dec)</div>
         <input
           type="number" min="0" step="0.01"
@@ -829,7 +997,6 @@ export default function AgentDetail() {
   const [agent, setAgent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [task, setTask] = useState('')
-  const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState('execute')
   const [toastMessage, setToastMessage] = useState(null)
   const [hasValidAccess, setHasValidAccess] = useState(false)
@@ -1124,12 +1291,6 @@ console.log('========================================\n')
     } finally { setExecuting(false); setTask('') }
   }
 
-  const copyEndpoint = () => {
-    navigator.clipboard.writeText(agent?.endpoint || '')
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   const monthlyEth = agent?.pricing ? parseFloat(formatUnits(BigInt(agent.pricing), 18)).toFixed(4) : '0'
 
   if (loading) return <div className="p-6 max-w-7xl mx-auto"><LoadingPulse /></div>
@@ -1168,8 +1329,8 @@ console.log('========================================\n')
           <div className="glass-card-landing rounded-2xl p-6 sm:p-8 relative overflow-hidden ">
             <div className="absolute top-0 right-0 w-[300px] h-[200px] rounded-full pointer-events-none" />
             <div className="relative z-10 flex flex-col lg:flex-row items-start gap-6">
-              <motion.div whileHover={{ scale: 1.05 }} className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[var(--color-accent-pink)] border border-[#d9b6c9] flex items-center justify-center shrink-0">
-                <Cpu size={32} className="text-[var(--color-primary)]" />
+              <motion.div whileHover={{ scale: 1.05 }} className="rounded-2xl overflow-hidden shrink-0 shadow-[0_4px_16px_rgba(111,53,178,0.22)]">
+                <AgentAvatar agent={agent} size={80} />
               </motion.div>
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -1343,7 +1504,6 @@ console.log('========================================\n')
                 <FadeInSection delay={0.15}>
                   <UpvoteButton
                     agentId={externalAgentId}
-                    contractAgentId={agent.contractAgentId}
                     ownerWallet={agent.ownerWallet}
                     initialUpvotes={agent.upvotes}
                     walletAddress={address}

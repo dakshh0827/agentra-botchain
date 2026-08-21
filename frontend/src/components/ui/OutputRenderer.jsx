@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, Download, Code, Image, Table, CheckCircle,
   Clock, Copy, ChevronDown, ChevronUp, ExternalLink,
-  FileCode, FileJson, AlertCircle, Package
+  FileCode, FileJson, AlertCircle, Package, FileSpreadsheet
 } from 'lucide-react'
 
 // ── Code Block Component (VS Code Dark+ Theme) ──────────────────
@@ -53,7 +53,7 @@ function SyntaxCodeBlock({ code, lang }) {
   }
 
   return (
-    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
+    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e]">
       <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
         <span className="text-sm font-mono text-[#cccccc] uppercase ">{lang || 'CODE'}</span>
         <button
@@ -83,11 +83,11 @@ function InlineCsvTable({ content }) {
   const rows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
 
   return (
-    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
+    <div className="my-4 rounded-xl border border-border overflow-hidden bg-panel">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <Table size={13} className="text-[#4ec9b0]" />
-          <span className="text-sm font-mono text-[#cccccc] uppercase ">DATA TABLE</span>
+          <Table size={13} className="text-text-dim" />
+          <span className="text-sm font-mono text-text-dim uppercase">Data table</span>
         </div>
         <button
           onClick={() => {
@@ -95,18 +95,18 @@ function InlineCsvTable({ content }) {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
           }}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-mono text-[#cccccc] hover:bg-[#404040] hover:text-white transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-mono text-text-dim hover:text-text-secondary transition-colors cursor-pointer"
         >
-          {copied ? <CheckCircle size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
+          {copied ? <CheckCircle size={12} className="text-success" /> : <Copy size={12} />}
           {copied ? 'COPIED' : 'COPY CSV'}
         </button>
       </div>
       <div className="overflow-x-auto max-h-72 overflow-y-auto">
-        <table className="w-full text-[12px] font-mono text-[#d4d4d4]">
-          <thead className="sticky top-0 bg-[#252526] border-b border-[#404040]">
+        <table className="w-full text-[12px] font-mono text-text-secondary">
+          <thead className="sticky top-0 bg-panel-light border-b border-border">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="text-left px-4 py-2.5 text-[#4ec9b0] font-bold whitespace-nowrap">
+                <th key={i} className="text-left px-4 py-2.5 text-text-primary font-bold whitespace-nowrap">
                   {h}
                 </th>
               ))}
@@ -114,7 +114,7 @@ function InlineCsvTable({ content }) {
           </thead>
           <tbody>
             {rows.map((row, ri) => (
-              <tr key={ri} className="border-b border-[#333333] hover:bg-[#2a2d2e] transition-colors">
+              <tr key={ri} className="border-b border-border">
                 {row.map((cell, ci) => (
                   <td key={ci} className="px-4 py-2 whitespace-nowrap">
                     {cell}
@@ -130,8 +130,30 @@ function InlineCsvTable({ content }) {
 }
 
 // ── Type Detection ────────────────────────────────────────────
+function parseJsonPayload(response) {
+  if (!response) return null
+  if (typeof response === 'object') return response
+  try {
+    const parsed = JSON.parse(typeof response === 'string' ? response : String(response))
+    return typeof parsed === 'object' && parsed ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function isSeoAuditPayload(obj) {
+  return Boolean(
+    obj
+    && typeof obj.overall === 'number'
+    && (obj.reportUrl || obj.pdfUrl || obj.excelUrl || obj.csvUrl || obj.sheetsUrl || obj.artifacts)
+    && Array.isArray(obj.categories)
+  )
+}
+
 function detectOutputType(response) {
   if (!response) return 'empty'
+  const parsed = parseJsonPayload(response)
+  if (parsed && isSeoAuditPayload(parsed)) return 'seo'
   if (typeof response !== 'string') return 'json'
 
   const trimmed = response.trim()
@@ -191,51 +213,235 @@ function CodeRenderer({ content }) {
   return <SyntaxCodeBlock code={raw} lang={lang} />
 }
 
+function scoreTone(score) {
+  if (score >= 90) return 'text-emerald-400'
+  if (score >= 75) return 'text-lime-400'
+  if (score >= 60) return 'text-amber-400'
+  if (score >= 40) return 'text-orange-400'
+  return 'text-red-400'
+}
+
+function SeoAuditRenderer({ content }) {
+  const data = parseJsonPayload(content) || {}
+  const htmlUrl = data.reportUrl || data.artifacts?.html
+  const pdfUrl = data.pdfUrl || data.artifacts?.pdf
+  const excelUrl = data.excelUrl || data.artifacts?.xlsx
+  const sheetsUrl = data.sheetsUrl || data.csvUrl || data.artifacts?.csv || data.artifacts?.sheets
+  const topIssues = Array.isArray(data.topIssues) ? data.topIssues : []
+  const categories = Array.isArray(data.categories) ? data.categories : []
+  const failed = Array.isArray(data.selfCheckFailed) ? data.selfCheckFailed : []
+  const notMeasured = data.grounding?.notMeasured || []
+  const downloads = Array.isArray(data.downloads) ? data.downloads : null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="shrink-0 text-center">
+          <div className={`text-4xl font-black leading-none ${scoreTone(data.overall)}`}>
+            {data.overall}
+          </div>
+          <div className="text-[11px] font-mono text-[var(--color-text-dim)] mt-1">/ 100</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-bold text-[var(--color-text-primary)]">
+            {data.label || 'SEO audit'} · Grade {data.grade || '—'}
+          </div>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1 leading-relaxed">
+            {data.summary || data.host}
+          </p>
+          {data.sampleWarning && (
+            <p className="text-xs text-amber-300/90 mt-2">{data.sampleWarning}</p>
+          )}
+          {failed.length > 0 && (
+            <p className="text-xs text-amber-400 mt-2">
+              Consistency check failed — treat this score as provisional.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {categories.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {categories.map((cat) => (
+            <div
+              key={cat.name}
+              className="rounded-lg border border-[var(--color-border)] bg-[rgba(0,0,0,0.25)] px-3 py-2"
+            >
+              <div className={`text-lg font-black ${scoreTone(cat.score)}`}>{cat.score}</div>
+              <div className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wide">
+                {cat.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {topIssues.length > 0 && (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-dim)] mb-2">
+            Top issues (from crawled pages)
+          </div>
+          <ul className="space-y-1.5">
+            {topIssues.map((issue, i) => (
+              <li key={i} className="text-sm text-[var(--color-text-secondary)] leading-snug">
+                <span className="font-mono text-[10px] uppercase text-red-400 mr-2">
+                  {issue.severity || 'issue'}
+                </span>
+                {issue.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {htmlUrl && (
+          <a href={htmlUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(147,197,253,0.1)] border border-[rgba(147,197,253,0.25)]
+                       text-[var(--color-star-blue)] hover:bg-[rgba(147,197,253,0.18)]">
+            <ExternalLink size={12} /> HTML report
+          </a>
+        )}
+        {pdfUrl && (
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.25)]
+                       text-red-300 hover:bg-[rgba(248,113,113,0.18)]">
+            <FileText size={12} /> PDF
+          </a>
+        )}
+        {excelUrl && (
+          <a href={excelUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)]
+                       text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.18)]">
+            <FileSpreadsheet size={12} /> Excel
+          </a>
+        )}
+        {sheetsUrl && (
+          <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(74,222,128,0.1)] border border-[rgba(74,222,128,0.28)]
+                       text-emerald-300 hover:bg-[rgba(74,222,128,0.18)]">
+            <Table size={12} /> Google Sheets (CSV)
+          </a>
+        )}
+      </div>
+      {downloads && (
+        <p className="text-[11px] text-[var(--color-text-dim)]">
+          Tip: open the CSV in Google Sheets via File → Import, or open directly in Excel.
+        </p>
+      )}
+
+      {notMeasured.length > 0 && (
+        <p className="text-[11px] text-[var(--color-text-dim)] leading-relaxed">
+          Not measured: {notMeasured.join(' · ')}
+        </p>
+      )}
+
+      <JsonRenderer content={content} />
+    </div>
+  )
+}
+
+function formatFieldLabel(key) {
+  return String(key).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase())
+}
+
+function JsonValue({ value, depth }) {
+  if (value === null || value === undefined) {
+    return <span className="text-text-dim">—</span>
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-text-dim">Empty list</span>
+    if (value.every(v => typeof v !== 'object' || v === null)) {
+      return (
+        <ul className="space-y-1">
+          {value.map((v, i) => (
+            <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
+              <span className="text-primary mt-0.5 shrink-0 text-xs">&bull;</span>
+              <span>{String(v)}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    return (
+      <div className="space-y-3">
+        {value.map((v, i) => (
+          <div key={i} className="rounded-lg border border-border p-3">
+            <div className="text-xs font-mono text-text-dim uppercase mb-2">Item {i + 1}</div>
+            <JsonValue value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value)
+    if (entries.length === 0) return <span className="text-text-dim">Empty</span>
+    return (
+      <dl className={depth > 0 ? 'space-y-2' : 'divide-y divide-border'}>
+        {entries.map(([k, v]) => {
+          const isNested = typeof v === 'object' && v !== null
+          return (
+            <div key={k} className={depth > 0 ? '' : 'py-2.5 first:pt-0 last:pb-0'}>
+              {isNested ? (
+                <>
+                  <dt className="text-xs font-mono text-text-dim uppercase tracking-wide mb-1">{formatFieldLabel(k)}</dt>
+                  <dd className="text-sm text-text-primary"><JsonValue value={v} depth={depth + 1} /></dd>
+                </>
+              ) : (
+                <dd className="text-sm text-text-primary">
+                  <span className="text-xs font-mono text-text-dim uppercase tracking-wide">{formatFieldLabel(k)}:</span>{' '}
+                  {String(v)}
+                </dd>
+              )}
+            </div>
+          )
+        })}
+      </dl>
+    )
+  }
+  return <span>{String(value)}</span>
+}
+
 function JsonRenderer({ content }) {
-  const [collapsed, setCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   let parsed, formatted
   try {
     parsed = typeof content === 'string' ? JSON.parse(content) : content
     formatted = JSON.stringify(parsed, null, 2)
   } catch {
+    parsed = null
     formatted = typeof content === 'string' ? content : JSON.stringify(content)
   }
 
   return (
-    <div className="my-2 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
+    <div className="rounded-xl border border-border bg-panel overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <FileJson size={13} className="text-[var(--color-warning)]" />
-          <span className="text-sm font-mono text-[#cccccc] uppercase ">JSON</span>
+          <FileJson size={13} className="text-text-dim" />
+          <span className="text-sm font-mono text-text-dim uppercase">Data</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-1 text-sm font-mono text-[#cccccc] hover:text-white cursor-pointer"
-          >
-            {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            {collapsed ? 'EXPAND' : 'COLLAPSE'}
-          </button>
-          <div className="w-px h-3 bg-[#404040] mx-1"></div>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(formatted)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 2000)
-            }}
-            className="flex items-center gap-1.5 text-sm font-mono text-[#cccccc] hover:text-white transition-all cursor-pointer"
-          >
-            {copied ? <CheckCircle size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
-            {copied ? 'COPIED' : 'COPY'}
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(formatted)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }}
+          className="flex items-center gap-1.5 text-sm font-mono text-text-dim hover:text-text-secondary transition-colors cursor-pointer"
+        >
+          {copied ? <CheckCircle size={12} className="text-success" /> : <Copy size={12} />}
+          {copied ? 'COPIED' : 'COPY'}
+        </button>
       </div>
-      {!collapsed && (
-        <pre className="p-4 overflow-x-auto text-[13px] font-mono text-[#ce9178] leading-relaxed max-h-80">
-          <code>{formatted}</code>
-        </pre>
-      )}
+      <div className="p-4">
+        {parsed !== null ? <JsonValue value={parsed} depth={0} /> : (
+          <p className="text-sm text-text-secondary whitespace-pre-wrap break-words">{formatted}</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -252,13 +458,13 @@ function DataUriRenderer({ content }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-[rgba(0,0,0,0.4)] border-b border-[var(--color-border)] rounded-t-xl">
-        <Package size={13} className="text-[var(--color-warning)]" />
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-panel-light border-b border-[var(--color-border)] rounded-t-xl">
+        <Package size={13} className="text-text-dim" />
         <span className="text-sm font-mono text-[var(--color-text-dim)] uppercase ">{mime}</span>
         <a
           href={content}
           download={`agent-output.${ext}`}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)] text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.2)] transition-all cursor-pointer"
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)] text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.16)] transition-colors cursor-pointer"
         >
           <Download size={12} />
           DOWNLOAD .{ext.toUpperCase()}
@@ -407,7 +613,7 @@ function MarkdownRenderer({ content }) {
 }
 
 // ── Main OutputRenderer ───────────────────────────────────────
-export default function OutputRenderer({ response, agentName, latency, success }) {
+export default function OutputRenderer({ response, latency, success }) {
   const [expanded, setExpanded] = useState(true)
   const type = useMemo(() => detectOutputType(response), [response])
 
@@ -417,6 +623,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
     text: { label: 'TEXT', icon: FileText, color: 'text-[var(--color-text-muted)]' },
     code: { label: 'CODE', icon: FileCode, color: 'text-[var(--color-primary)]' },
     json: { label: 'JSON', icon: FileJson, color: 'text-[var(--color-warning)]' },
+    seo: { label: 'SEO AUDIT', icon: FileText, color: 'text-[var(--color-star-blue)]' },
     csv: { label: 'TABLE', icon: Table, color: 'text-[var(--color-star-blue)]' },
     datauri: { label: 'FILE', icon: Download, color: 'text-[var(--color-success)]' },
     url: { label: 'URL', icon: ExternalLink, color: 'text-[var(--color-star-blue)]' },
@@ -429,15 +636,13 @@ export default function OutputRenderer({ response, agentName, latency, success }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border overflow-hidden ${
-        success !== false
-          ? 'border-[rgba(52,211,153,0.25)] bg-[rgba(52,211,153,0.03)]'
-          : 'border-[rgba(248,113,113,0.25)] bg-[rgba(248,113,113,0.03)]'
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`rounded-xl border overflow-hidden bg-panel ${
+        success !== false ? 'border-border' : 'border-[rgba(193,73,73,0.35)]'
       }`}
     >
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] bg-[rgba(0,0,0,0.3)]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2">
           {success !== false
             ? <CheckCircle size={14} className="text-[var(--color-success)]" />
@@ -448,7 +653,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[rgba(255,255,255,0.04)] border border-[var(--color-border)]">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--color-border)]">
           <MetaIcon size={11} className={meta.color} />
           <span className={`text-xs font-bold ${meta.color}`}>{meta.label}</span>
         </div>
@@ -479,6 +684,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
             <div className="p-4">
               {type === 'text' && <TextRenderer content={response} />}
               {type === 'code' && <CodeRenderer content={response} />}
+              {type === 'seo' && <SeoAuditRenderer content={response} />}
               {type === 'json' && <JsonRenderer content={response} />}
               {type === 'csv' && <CsvRenderer content={response} />}
               {type === 'datauri' && <DataUriRenderer content={response} />}

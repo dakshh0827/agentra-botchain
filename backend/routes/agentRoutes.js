@@ -25,6 +25,13 @@ import { getReviews, createReview } from '../controllers/reviewController.js'
 import { callAgent, discoverAgents, getCommsTarget, getMessages } from '../controllers/agentCommsController.js'
 import { issueLicenseKey } from '../services/licenseService.js'
 import { getRuntimeSecrets } from '../services/runtimeSecretsService.js'
+import {
+  chatWithAgent,
+  getAgentConversation,
+  deleteAgentConversation,
+  getMyConversations,
+} from '../controllers/chatController.js'
+import { executeStream, chatStream } from '../controllers/streamController.js'
 
 const upload = multer({ storage: multer.memoryStorage() })
 
@@ -38,6 +45,19 @@ router.get('/', optionalAuth, getAgents)
 router.get('/search', searchAgents)
 router.get('/discover', authMiddleware, discoverAgents)
 router.get('/comms-target', authMiddleware, getCommsTarget)
+
+// ── CHAT (PROTECTED) ─────────────────────────
+// Any agent exposing POST /chat gets durable per-wallet history from these three; the
+// agent stays stateless and the thread survives its restarts.
+router.get('/conversations', authMiddleware, getMyConversations)
+router.post('/:agentId/chat', authMiddleware, chatWithAgent)
+// SSE. Separate from /execute because the orchestrator cannot consume a stream —
+// see controllers/streamController.js for why it is not taught to.
+router.post('/:agentId/execute/stream', authMiddleware, executeStream)
+router.post('/:agentId/chat/stream', authMiddleware, chatStream)
+router.get('/:agentId/conversation', authMiddleware, getAgentConversation)
+router.delete('/:agentId/conversation', authMiddleware, deleteAgentConversation)
+
 router.get('/:agentId/metrics', getAgentMetrics)
 router.get('/:agentId/manifest', optionalAuth, getAgentManifest)
 

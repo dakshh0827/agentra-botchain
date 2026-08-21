@@ -1,0 +1,883 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useAccount } from 'wagmi'
+import { useWeb3Modal } from '@web3modal/wagmi/react'
+import {
+  X, Send, Loader2, ExternalLink, MessageSquare, Terminal, AlertCircle,
+  FileText, FileSpreadsheet, FileDown, Table2, History, LayoutGrid,
+  CheckCircle2, Trash2, Wallet, ShoppingCart, Lock,
+} from 'lucide-react'
+import { agentsAPI } from '../../api/agents'
+import { streamSSE } from '../../api/stream'
+import AgentAvatar from './AgentAvatar'
+import ReportCard from './ReportCard'
+import ComparisonCard from './ComparisonCard'
+import { getAgentExternalId } from '../../utils/helpers'
+import { featuresForAgent, isSeoAgent } from '../../utils/agentFeatures'
+
+function placeholderFor(agent) {
+  if (isSeoAgent(agent)) {
+    return 'e.g. crawl 10 pages on example.com · technical SEO only for mysite.com · compare a.com with b.com'
+  }
+  return 'Describe what you want this agent to do…'
+}
+
+const SEO_DELIVERABLES = [
+  { icon: FileText, label: 'HTML', tone: 'text-sky-700 bg-sky-50 border-sky-200' },
+  { icon: FileDown, label: 'PDF', tone: 'text-rose-700 bg-rose-50 border-rose-200' },
+  { icon: FileSpreadsheet, label: 'Excel', tone: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
+  { icon: Table2, label: 'Sheets CSV', tone: 'text-green-800 bg-green-50 border-green-200' },
+]
+
+const TABS = [
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'features', label: 'Features', icon: LayoutGrid },
+]
+
+function FeatureGrid({ agent }) {
+  const seo = isSeoAgent(agent)
+  const features = featuresForAgent(agent)
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-[15px] font-bold tracking-tight text-[var(--color-text-primary)] mb-1">
+          {seo ? 'What it checks' : 'What this agent does'}
+        </h3>
+        <p className="text-xs text-[var(--color-text-muted)] mb-3.5 leading-relaxed">
+          {seo
+            ? 'Measured from a live crawl — not invented rankings or backlinks.'
+            : 'Derived from this agent’s category, tags, and description — not a shared template.'}
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {features.map(({ icon: Icon, title, blurb, wrap, tone, iconWrap }) => (
+            <div
+              key={title}
+              className={`group relative overflow-hidden flex items-start gap-3.5 rounded-2xl border
+                          px-3.5 py-3.5 shadow-sm transition-all duration-200
+                          hover:-translate-y-0.5 hover:shadow-md
+                          ${tone || 'border-[var(--color-border)] bg-[var(--color-bg)]'}`}
+            >
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-md
+                            ${iconWrap || `${wrap || 'bg-slate-700'} text-white`}`}
+              >
+                <Icon size={18} strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0 pt-0.5">
+                <div className="text-sm font-bold text-[var(--color-text-primary)] tracking-tight">
+                  {title}
+                </div>
+                <div className="text-[11.5px] text-[var(--color-text-muted)] mt-1 leading-snug">
+                  {blurb}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {seo && (
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <h3 className="text-[15px] font-bold tracking-tight text-[var(--color-text-primary)] mb-1">
+            You get
+          </h3>
+          <p className="text-xs text-[var(--color-text-muted)] mb-3.5">
+            Downloadable after every successful audit.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {SEO_DELIVERABLES.map(({ icon: Icon, label, tone }) => (
+              <span
+                key={label}
+                className={`inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3
+                            rounded-xl border text-xs font-bold shadow-sm ${tone}`}
+              >
+                <Icon size={18} strokeWidth={2.2} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HistoryPanel({ messages, loading, onJumpToChat, onClearLocal }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-xs text-[var(--color-text-dim)] font-mono">
+        <Loader2 size={14} className="animate-spin text-primary" /> Loading history…
+      </div>
+    )
+  }
+
+  if (!messages.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+        <History size={28} className="text-[var(--color-text-dim)] mb-3 opacity-60" />
+        <p className="text-sm font-semibold text-[var(--color-text-primary)]">No saved chats yet</p>
+        <p className="text-xs text-[var(--color-text-muted)] mt-1 max-w-xs">
+          Runs and follow-ups are stored for this wallet + agent once you connect and execute.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-[var(--color-text-muted)]">
+          {messages.length} saved message{messages.length === 1 ? '' : 's'}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onJumpToChat}
+            className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+          >
+            Open in chat →
+          </button>
+          {onClearLocal && (
+            <button
+              type="button"
+              onClick={onClearLocal}
+              className="inline-flex items-center gap-1 text-[11px] text-[var(--color-text-dim)] hover:text-[var(--color-danger)] cursor-pointer"
+              title="Clear this session view only"
+            >
+              <Trash2 size={11} /> Clear view
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="space-y-2">
+        {messages.map((m, i) => (
+          <div
+            key={m.id || i}
+            className={`rounded-xl border px-3.5 py-2.5 text-sm leading-relaxed ${
+              m.role === 'user'
+                ? 'border-[#d9c2f2] bg-[var(--color-accent-pink)] ml-6'
+                : 'border-[var(--color-border)] bg-[var(--color-bg-card)] mr-6'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-[10px] uppercase tracking-wide font-bold text-[var(--color-text-dim)]">
+                {m.role === 'user' ? 'You' : 'Agent'}
+              </span>
+              {m.createdAt && (
+                <span className="text-[10px] font-mono text-[var(--color-text-dim)]">
+                  {new Date(m.createdAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+            <p className="text-[var(--color-text-secondary)] whitespace-pre-wrap break-words">
+              {m.content || m.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Large try-panel over Explorer — Agentra theme, execute-first.
+ * Tabs for chat, saved history, and feature overview.
+ */
+export default function TryAgentModal({ agent, open, onClose }) {
+  const { isConnected } = useAccount()
+  const { open: openWallet } = useWeb3Modal()
+  const [tab, setTab] = useState('features')
+  const [task, setTask] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [turns, setTurns] = useState([])
+  const [report, setReport] = useState(null)
+  const [comparison, setComparison] = useState(null)
+  const [reportId, setReportId] = useState(null)
+  const [canChat, setCanChat] = useState(false)
+  const [phase, setPhase] = useState(null)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const bottomRef = useRef(null)
+  const inputRef = useRef(null)
+
+  const agentId = agent ? getAgentExternalId(agent) : null
+  const seo = isSeoAgent(agent)
+
+  const loadHistory = useCallback(async () => {
+    if (!agentId || !isConnected) {
+      setHistory([])
+      return
+    }
+    setHistoryLoading(true)
+    try {
+      const res = await agentsAPI.getConversation(agentId)
+      setHistory(res.data?.messages || [])
+    } catch {
+      setHistory([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [agentId, isConnected])
+
+  useEffect(() => {
+    if (!open) return
+    setTab(isConnected ? 'chat' : 'features')
+    setTask('')
+    setError(null)
+    setBusy(false)
+    setReport(null)
+    setComparison(null)
+    setReportId(null)
+    setCanChat(false)
+    setTurns(
+      isConnected
+        ? [
+            {
+              role: 'system',
+              showLabel: true,
+              text: seo
+                ? `${agent?.name || 'Agent'} is ready. Name a site to audit — then ask follow-ups about the report.`
+                : `${agent?.name || 'Agent'} is ready. Send a concrete task to run.`,
+            },
+          ]
+        : [],
+    )
+
+    let active = true
+    if (agentId && isConnected) {
+      agentsAPI
+        .getConversation(agentId)
+        .then((res) => {
+          const prior = res.data?.messages || []
+          if (!active) return
+          setHistory(prior)
+          if (!prior.length) return
+          setTurns((current) => [
+            ...current,
+            { role: 'system', text: `Restored ${prior.length} earlier message(s) — see History tab` },
+            ...prior.slice(-6).map((m) => ({
+              role: m.role === 'user' ? 'user' : 'agent',
+              text: m.content,
+              old: true,
+            })),
+            { role: 'divider', text: 'This session' },
+          ])
+          setCanChat(true)
+        })
+        .catch(() => {})
+    } else {
+      setHistory([])
+    }
+
+    const t = setTimeout(() => {
+      if (isConnected) inputRef.current?.focus()
+    }, 180)
+    return () => {
+      active = false
+      clearTimeout(t)
+    }
+  }, [open, agent, agentId, isConnected, seo])
+
+  // After connect while modal is open, land on chat ready to run
+  useEffect(() => {
+    if (!open || !isConnected) return
+    setTab((prev) => (prev === 'features' ? 'chat' : prev))
+  }, [isConnected, open])
+
+  useEffect(() => {
+    if (!open || tab !== 'history') return
+    loadHistory()
+  }, [open, tab, loadHistory])
+
+  useEffect(() => {
+    if (!open || tab !== 'chat') return
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [turns, report, comparison, open, tab])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKey)
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previous
+    }
+  }, [open, onClose])
+
+  const run = useCallback(async () => {
+    const text = task.trim()
+    if (!text || !agentId || busy) return
+
+    if (!isConnected) {
+      setError('Connect your wallet to run this agent.')
+      return
+    }
+
+    setTab('chat')
+    setError(null)
+    setBusy(true)
+    setTurns((prev) => [...prev, { role: 'user', text }])
+    setTask('')
+
+    try {
+      if (reportId && canChat) {
+        let streamed = ''
+        setTurns((prev) => [...prev, { role: 'agent', text: '' }])
+
+        await streamSSE(
+          `/agents/${agentId}/chat/stream`,
+          { question: text, reportId },
+          (event) => {
+            if (event.type === 'comparison') {
+              setComparison(event.payload)
+              return
+            }
+            if (event.type === 'token') {
+              streamed += event.text || ''
+            } else if (event.type === 'done' && event.answer) {
+              streamed = event.answer
+            } else if (event.type === 'error') {
+              throw new Error(event.error)
+            }
+            setTurns((prev) => {
+              const next = [...prev]
+              next[next.length - 1] = { role: 'agent', text: streamed }
+              return next
+            })
+          },
+        )
+        loadHistory()
+        return
+      }
+
+      let streamedResult = null
+      let spokenText = ''
+      let agentSaid = null
+
+      try {
+        setTurns((prev) => [...prev, { role: 'agent', text: '' }])
+        await streamSSE(
+          `/agents/${agentId}/execute/stream`,
+          { task: text },
+          (event) => {
+            if (event.type === 'phase') {
+              setPhase(
+                event.total
+                  ? `${event.message} (${event.done}/${event.total})`
+                  : event.message,
+              )
+            } else if (event.type === 'token') {
+              spokenText += event.text || ''
+              setTurns((prev) => {
+                const next = [...prev]
+                next[next.length - 1] = { role: 'agent', text: spokenText }
+                return next
+              })
+            } else if (event.type === 'result') {
+              streamedResult = event.payload
+            } else if (event.type === 'error') {
+              agentSaid = event.error
+            }
+          },
+        )
+      } catch (streamErr) {
+        setTurns((prev) => (prev[prev.length - 1]?.text === '' ? prev.slice(0, -1) : prev))
+        if (streamedResult === null && !spokenText && !agentSaid) {
+          console.info('Streaming unavailable, using plain execute:', streamErr?.message)
+        } else {
+          throw streamErr
+        }
+      } finally {
+        setPhase(null)
+      }
+
+      if (agentSaid && !streamedResult && !spokenText) {
+        setTurns((prev) => {
+          const next = [...prev]
+          next[next.length - 1] = { role: 'agent', text: agentSaid }
+          return next
+        })
+        loadHistory()
+        return
+      }
+      if (spokenText && !streamedResult) {
+        loadHistory()
+        return
+      }
+
+      if (streamedResult) {
+        setReportId(streamedResult.reportId || null)
+        setCanChat(!!streamedResult.canChat)
+        if (streamedResult.reportId) setReport(streamedResult)
+        if (streamedResult.comparisonId) setComparison(streamedResult)
+        loadHistory()
+        return
+      }
+
+      const response = await agentsAPI.execute(agentId, text)
+      const data = response.data || {}
+      const output = data.response ?? data.output ?? data.result ?? data
+      const success = data.success !== false && !data.error
+
+      if (data.error && (output === data || output == null)) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Execution failed')
+      }
+
+      let summary = 'Run finished. See the result below.'
+      if (typeof output === 'object' && output?.summary) {
+        summary = output.summary
+      } else if (typeof output === 'string') {
+        try {
+          const parsed = JSON.parse(output)
+          if (parsed?.summary) summary = parsed.summary
+          else summary = output.slice(0, 280)
+        } catch {
+          summary = output.slice(0, 280)
+        }
+      } else if (!success) {
+        summary = 'Run finished with an error.'
+      }
+
+      const spoken = typeof output === 'object' ? output?.spokenSummary : null
+      const rid = typeof output === 'object' ? output?.reportId : null
+      if (rid) setReportId(rid)
+      if (typeof output === 'object' && output?.canChat) setCanChat(true)
+
+      setTurns((prev) => [...prev, { role: 'agent', text: spoken || summary }])
+      if (rid && typeof output === 'object') setReport(output)
+      if (typeof output === 'object' && output?.comparisonId) setComparison(output)
+      loadHistory()
+    } catch (err) {
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Execution failed'
+      setError(msg)
+      setTurns((prev) => [...prev, { role: 'agent', text: `Could not run: ${msg}` }])
+      setReport(null)
+    } finally {
+      setBusy(false)
+      setPhase(null)
+    }
+  }, [task, agentId, busy, isConnected, reportId, canChat, loadHistory])
+
+  const liveCount = useMemo(
+    () => turns.filter((t) => t.role === 'user' || t.role === 'agent').length,
+    [turns],
+  )
+
+  if (!agent) return null
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 bg-[rgba(28,18,36,0.55)] backdrop-blur-[4px] cursor-pointer"
+            onClick={onClose}
+          />
+
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="try-agent-title"
+            initial={{ opacity: 0, y: 28, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            className="relative w-full max-w-6xl h-[min(94vh,900px)] flex flex-col rounded-3xl
+                       border border-[rgba(172,100,247,0.32)]
+                       bg-[var(--color-panel)]
+                       shadow-[0_32px_90px_rgba(111,53,178,0.28),0_0_0_1px_rgba(172,100,247,0.12)]
+                       overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Premium header band */}
+            <div className="shrink-0 relative overflow-hidden border-b border-[var(--color-border)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#AC64F7]/12 via-transparent to-[#6F35B2]/08 pointer-events-none" />
+              <div className="relative px-5 sm:px-7 pt-5 pb-0">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="rounded-2xl overflow-hidden shrink-0 ring-2 ring-[rgba(172,100,247,0.35)]
+                                  shadow-[0_4px_16px_rgba(111,53,178,0.3)]">
+                    <AgentAvatar agent={agent} size={52} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2
+                        id="try-agent-title"
+                        className="font-display font-bold text-xl sm:text-2xl text-[var(--color-text-primary)] truncate"
+                      >
+                        {agent.name}
+                      </h2>
+                      {agent.category && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-[rgba(172,100,247,0.35)]
+                                         bg-[rgba(172,100,247,0.12)] text-primary font-semibold">
+                          {agent.category}
+                        </span>
+                      )}
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-[var(--color-border)]
+                                       text-[var(--color-text-dim)] font-mono inline-flex items-center gap-1">
+                        <Terminal size={9} /> Execute
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] mt-1.5 line-clamp-2 max-w-3xl">
+                      {agent.description || 'No description provided.'}
+                    </p>
+                    {seo && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {SEO_DELIVERABLES.map(({ icon: Icon, label, tone }) => (
+                          <span
+                            key={label}
+                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${tone}`}
+                          >
+                            <Icon size={12} />
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      to={`/agent/${agentId}`}
+                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                                 border border-[var(--color-border)] text-[var(--color-text-secondary)]
+                                 hover:border-primary hover:text-primary transition-colors bg-[var(--color-bg)]"
+                      onClick={onClose}
+                    >
+                      Full page <ExternalLink size={11} />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-10 h-10 rounded-xl border border-[var(--color-border)] flex items-center justify-center
+                                 text-[var(--color-text-dim)] hover:text-[var(--color-text-primary)] hover:border-primary
+                                 transition-colors cursor-pointer bg-[var(--color-bg)]"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="mt-5 flex items-end gap-1 overflow-x-auto">
+                  {TABS.map(({ id, label, icon: Icon }) => {
+                    const active = tab === id
+                    const badge =
+                      id === 'history' && history.length
+                        ? history.length
+                        : id === 'chat' && liveCount
+                          ? liveCount
+                          : null
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTab(id)}
+                        className={`relative inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-xl
+                                    transition-colors cursor-pointer whitespace-nowrap ${
+                                      active
+                                        ? 'text-primary bg-[var(--color-bg)] border border-b-0 border-[var(--color-border)]'
+                                        : 'text-[var(--color-text-dim)] hover:text-[var(--color-text-secondary)]'
+                                    }`}
+                      >
+                        <Icon size={13} />
+                        {label}
+                        {badge != null && (
+                          <span className={`min-w-4 h-4 px-1 rounded-full text-[9px] flex items-center justify-center ${
+                            active ? 'bg-primary text-white' : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-muted)]'
+                          }`}>
+                            {badge}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto bg-[var(--color-bg)]">
+              {tab === 'chat' && (
+                <div className="px-5 sm:px-7 py-5 space-y-3 min-h-full">
+                  {!isConnected ? (
+                    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)]
+                                    p-6 sm:p-8 text-center max-w-lg mx-auto my-6 shadow-sm">
+                      <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center mb-4">
+                        <Lock size={20} />
+                      </div>
+                      <h3 className="text-base font-bold text-[var(--color-text-primary)]">
+                        Connect to run this agent
+                      </h3>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-2 leading-relaxed">
+                        Browse features freely. Running audits, chat history, and purchases need a
+                        connected wallet on 0G.
+                      </p>
+                      <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
+                        <button
+                          type="button"
+                          onClick={() => openWallet()}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                     bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
+                                     hover:brightness-110 transition-all cursor-pointer"
+                        >
+                          <Wallet size={14} /> Connect wallet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTab('features')}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                     border border-[var(--color-border)] bg-[var(--color-bg)]
+                                     text-[var(--color-text-primary)] hover:border-primary transition-colors cursor-pointer"
+                        >
+                          <LayoutGrid size={14} /> See features
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                  {turns.map((turn, i) =>
+                    turn.role === 'divider' ? (
+                      <div key={i} className="flex items-center gap-3 py-2">
+                        <div className="h-px flex-1 bg-[var(--color-border)]" />
+                        <span className="text-[10px] uppercase tracking-wide font-bold text-[var(--color-text-dim)]">
+                          {turn.text}
+                        </span>
+                        <div className="h-px flex-1 bg-[var(--color-border)]" />
+                      </div>
+                    ) : (
+                      <div
+                        key={i}
+                        className={`flex ${turn.role === 'user' ? 'justify-end' : 'justify-start'} ${
+                          turn.old ? 'opacity-65' : ''
+                        }`}
+                      >
+                        <div
+                          className={`max-w-[92%] sm:max-w-[78%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+                            turn.role === 'user'
+                              ? 'bg-[var(--color-accent-pink)] border border-[#d9c2f2] text-[var(--color-text-primary)]'
+                              : turn.role === 'system'
+                                ? 'bg-[var(--color-bg-tertiary)] border border-[var(--color-border)] text-[var(--color-text-muted)]'
+                                : 'bg-[var(--color-panel)] border border-[var(--color-border)] text-[var(--color-text-secondary)]'
+                          }`}
+                        >
+                          {turn.role === 'system' && turn.showLabel && (
+                            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-bold text-[var(--color-text-dim)] mb-1">
+                              <CheckCircle2 size={10} /> Ready
+                            </div>
+                          )}
+                          {turn.role === 'agent' && (
+                            <div className="text-[10px] uppercase tracking-wide font-bold text-primary mb-1">
+                              Agent
+                            </div>
+                          )}
+                          {turn.text}
+                        </div>
+                      </div>
+                    ),
+                  )}
+
+                  {busy && (
+                    <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)] font-mono">
+                      <Loader2 size={13} className="animate-spin text-primary" />
+                      <span className="truncate">{phase || 'Running agent…'}</span>
+                    </div>
+                  )}
+
+                  {report && <ReportCard report={report} />}
+                  {comparison && <ComparisonCard comparison={comparison} />}
+
+                  {error && !busy && (
+                    <div className="flex items-start gap-2 text-xs text-[var(--color-danger)] bg-[rgba(193,73,73,0.07)]
+                                    border border-[rgba(193,73,73,0.22)] rounded-xl px-3 py-2">
+                      <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div ref={bottomRef} />
+                    </>
+                  )}
+                </div>
+              )}
+
+              {tab === 'history' && (
+                <div className="px-5 sm:px-7 py-5">
+                  {!isConnected ? (
+                    <div className="text-center py-14 px-4 max-w-sm mx-auto">
+                      <p className="text-sm text-[var(--color-text-muted)] mb-4">
+                        Connect your wallet to load saved conversations for this agent.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openWallet()}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white cursor-pointer"
+                      >
+                        <Wallet size={14} /> Connect wallet
+                      </button>
+                    </div>
+                  ) : (
+                    <HistoryPanel
+                      messages={history}
+                      loading={historyLoading}
+                      onJumpToChat={() => setTab('chat')}
+                      onClearLocal={() => {
+                        setTurns([
+                          {
+                            role: 'system',
+                            showLabel: true,
+                            text: 'Session view cleared. Saved history is still on the server — refresh History to see it.',
+                          },
+                        ])
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {tab === 'features' && (
+                <div className="px-5 sm:px-7 py-6 space-y-4">
+                  {!isConnected && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3
+                                    flex flex-col sm:flex-row sm:items-center gap-3">
+                      <p className="text-xs text-amber-900/80 leading-relaxed flex-1">
+                        Preview mode — explore what this agent does. Connect to run it or purchase access.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openWallet()}
+                        className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                                   text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
+                      >
+                        <Wallet size={12} /> Connect
+                      </button>
+                    </div>
+                  )}
+                  <FeatureGrid agent={agent} />
+                </div>
+              )}
+            </div>
+
+            {/* Composer / gate CTA */}
+            <div className="shrink-0 px-4 sm:px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-panel)]">
+              {!isConnected ? (
+                <div className="rounded-2xl border border-[rgba(172,100,247,0.28)]
+                                bg-gradient-to-br from-[rgba(172,100,247,0.10)] to-[rgba(111,53,178,0.06)]
+                                p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-[var(--color-text-primary)]">
+                        Ready when you are
+                      </div>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-1 leading-relaxed">
+                        Connect your wallet to try this agent, or open the full page to purchase access.
+                      </p>
+                    </div>
+                    <div className="flex flex-col xs:flex-row sm:flex-row gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openWallet()}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
+                                   hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.35)]"
+                      >
+                        <Wallet size={14} /> Connect wallet
+                      </button>
+                      <Link
+                        to={`/agent/${agentId}`}
+                        onClick={onClose}
+                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                   border border-[var(--color-border)] bg-[var(--color-bg)]
+                                   text-[var(--color-text-primary)] hover:border-primary transition-colors"
+                      >
+                        <ShoppingCart size={14} /> Pricing & purchase
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+              {tab !== 'chat' && (
+                <button
+                  type="button"
+                  onClick={() => setTab('chat')}
+                  className="mb-2 text-[11px] font-semibold text-primary cursor-pointer hover:underline"
+                >
+                  ← Back to chat to run
+                </button>
+              )}
+              <div className="flex items-end gap-2 rounded-2xl border border-[rgba(172,100,247,0.35)]
+                              bg-[var(--color-bg)] focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(172,100,247,0.12)]
+                              transition-all px-3 py-2">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={task}
+                  onChange={(e) => setTask(e.target.value)}
+                  onFocus={() => setTab('chat')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      run()
+                    }
+                  }}
+                  placeholder={
+                    reportId && canChat
+                      ? 'Ask about this report…'
+                      : placeholderFor(agent)
+                  }
+                  className="flex-1 resize-none bg-transparent border-0 outline-none text-sm
+                             text-[var(--color-text-primary)] placeholder:text-[var(--color-text-dim)]
+                             max-h-28 py-2.5 px-1"
+                />
+                <button
+                  type="button"
+                  onClick={run}
+                  disabled={busy || !task.trim()}
+                  className="shrink-0 w-11 h-11 rounded-full bg-gradient-to-br from-[#AC64F7] to-[#6F35B2]
+                             text-white flex items-center justify-center disabled:opacity-40
+                             hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.45)]"
+                  aria-label="Run"
+                >
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                </button>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 px-1">
+                <span className="text-[10px] text-[var(--color-text-dim)]">
+                  Enter to send · Esc to close · History saves per wallet
+                </span>
+                <Link
+                  to={`/agent/${agentId}`}
+                  onClick={onClose}
+                  className="sm:hidden text-[10px] font-semibold text-primary"
+                >
+                  Full page →
+                </Link>
+              </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}

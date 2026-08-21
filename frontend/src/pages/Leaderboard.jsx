@@ -112,7 +112,7 @@ export default function Leaderboard() {
           <FadeInSection className="mb-10">
             <div className="grid grid-cols-3 gap-3 sm:gap-5 items-end">
               {/* 2nd Place */}
-              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }} whileHover={{ y: -4 }}>
+              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }}>
                 <Link to={`/agent/${getAgentExternalId(ranked[1])}`}>
                   <div className={`glass-card-landing rounded-xl p-4 sm:p-5 text-center ${podiumStyles(1).border} ${podiumStyles(1).bg} ${podiumStyles(1).glow} relative overflow-hidden group`}>
                     <div className="relative z-10">
@@ -129,7 +129,7 @@ export default function Leaderboard() {
               </motion.div>
 
               {/* 1st Place */}
-              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }} whileHover={{ y: -6 }} className="-mt-4">
+              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }} className="-mt-4">
                 <Link to={`/agent/${getAgentExternalId(ranked[0])}`}>
                   <div className={`glass-card-landing rounded-xl p-5 sm:p-6 text-center ${podiumStyles(0).border} ${podiumStyles(0).bg} ${podiumStyles(0).glow} relative overflow-hidden group`}>
                     <div className="relative z-10">
@@ -150,7 +150,7 @@ export default function Leaderboard() {
               </motion.div>
 
               {/* 3rd Place */}
-              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }} whileHover={{ y: -4 }}>
+              <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }}>
                 <Link to={`/agent/${getAgentExternalId(ranked[2])}`}>
                   <div className={`glass-card-landing rounded-xl p-4 sm:p-5 text-center ${podiumStyles(2).border} ${podiumStyles(2).bg} ${podiumStyles(2).glow} relative overflow-hidden group`}>
                     <div className="relative z-10">
@@ -222,7 +222,7 @@ export default function Leaderboard() {
                         <div className="col-span-1 flex items-center">{rankIcon(i)}</div>
 
                         <div className="col-span-4 flex items-center gap-2 sm:gap-3 min-w-0">
-                          <motion.div whileHover={{ scale: 1.1 }} className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[var(--color-nebula-deep)] border border-[var(--color-border)] flex items-center justify-center shrink-0">
+                          <motion.div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[var(--color-nebula-deep)] border border-[var(--color-border)] flex items-center justify-center shrink-0">
                             <Zap size={14} className="text-[var(--color-primary)]" />
                           </motion.div>
                           <div className="min-w-0">

@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "^1.2.4",
