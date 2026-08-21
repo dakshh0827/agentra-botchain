@@ -53,7 +53,7 @@ function SyntaxCodeBlock({ code, lang }) {
   }
 
   return (
-    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
+    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e]">
       <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
         <span className="text-sm font-mono text-[#cccccc] uppercase ">{lang || 'CODE'}</span>
         <button
@@ -83,11 +83,11 @@ function InlineCsvTable({ content }) {
   const rows = lines.slice(1).map(l => l.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
 
   return (
-    <div className="my-4 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
+    <div className="my-4 rounded-xl border border-border overflow-hidden bg-panel">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <Table size={13} className="text-[#4ec9b0]" />
-          <span className="text-sm font-mono text-[#cccccc] uppercase ">DATA TABLE</span>
+          <Table size={13} className="text-text-dim" />
+          <span className="text-sm font-mono text-text-dim uppercase">Data table</span>
         </div>
         <button
           onClick={() => {
@@ -95,18 +95,18 @@ function InlineCsvTable({ content }) {
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
           }}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-mono text-[#cccccc] hover:bg-[#404040] hover:text-white transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-mono text-text-dim hover:text-text-secondary transition-colors cursor-pointer"
         >
-          {copied ? <CheckCircle size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
+          {copied ? <CheckCircle size={12} className="text-success" /> : <Copy size={12} />}
           {copied ? 'COPIED' : 'COPY CSV'}
         </button>
       </div>
       <div className="overflow-x-auto max-h-72 overflow-y-auto">
-        <table className="w-full text-[12px] font-mono text-[#d4d4d4]">
-          <thead className="sticky top-0 bg-[#252526] border-b border-[#404040]">
+        <table className="w-full text-[12px] font-mono text-text-secondary">
+          <thead className="sticky top-0 bg-panel-light border-b border-border">
             <tr>
               {headers.map((h, i) => (
-                <th key={i} className="text-left px-4 py-2.5 text-[#4ec9b0] font-bold whitespace-nowrap">
+                <th key={i} className="text-left px-4 py-2.5 text-text-primary font-bold whitespace-nowrap">
                   {h}
                 </th>
               ))}
@@ -114,7 +114,7 @@ function InlineCsvTable({ content }) {
           </thead>
           <tbody>
             {rows.map((row, ri) => (
-              <tr key={ri} className="border-b border-[#333333] hover:bg-[#2a2d2e] transition-colors">
+              <tr key={ri} className="border-b border-border">
                 {row.map((cell, ci) => (
                   <td key={ci} className="px-4 py-2 whitespace-nowrap">
                     {cell}
@@ -191,51 +191,103 @@ function CodeRenderer({ content }) {
   return <SyntaxCodeBlock code={raw} lang={lang} />
 }
 
+function formatFieldLabel(key) {
+  return String(key).replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase())
+}
+
+function JsonValue({ value, depth }) {
+  if (value === null || value === undefined) {
+    return <span className="text-text-dim">—</span>
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-text-dim">Empty list</span>
+    if (value.every(v => typeof v !== 'object' || v === null)) {
+      return (
+        <ul className="space-y-1">
+          {value.map((v, i) => (
+            <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
+              <span className="text-primary mt-0.5 shrink-0 text-xs">&bull;</span>
+              <span>{String(v)}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    return (
+      <div className="space-y-3">
+        {value.map((v, i) => (
+          <div key={i} className="rounded-lg border border-border p-3">
+            <div className="text-xs font-mono text-text-dim uppercase mb-2">Item {i + 1}</div>
+            <JsonValue value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value)
+    if (entries.length === 0) return <span className="text-text-dim">Empty</span>
+    return (
+      <dl className={depth > 0 ? 'space-y-2' : 'divide-y divide-border'}>
+        {entries.map(([k, v]) => {
+          const isNested = typeof v === 'object' && v !== null
+          return (
+            <div key={k} className={depth > 0 ? '' : 'py-2.5 first:pt-0 last:pb-0'}>
+              {isNested ? (
+                <>
+                  <dt className="text-xs font-mono text-text-dim uppercase tracking-wide mb-1">{formatFieldLabel(k)}</dt>
+                  <dd className="text-sm text-text-primary"><JsonValue value={v} depth={depth + 1} /></dd>
+                </>
+              ) : (
+                <dd className="text-sm text-text-primary">
+                  <span className="text-xs font-mono text-text-dim uppercase tracking-wide">{formatFieldLabel(k)}:</span>{' '}
+                  {String(v)}
+                </dd>
+              )}
+            </div>
+          )
+        })}
+      </dl>
+    )
+  }
+  return <span>{String(value)}</span>
+}
+
 function JsonRenderer({ content }) {
-  const [collapsed, setCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   let parsed, formatted
   try {
     parsed = typeof content === 'string' ? JSON.parse(content) : content
     formatted = JSON.stringify(parsed, null, 2)
   } catch {
+    parsed = null
     formatted = typeof content === 'string' ? content : JSON.stringify(content)
   }
 
   return (
-    <div className="my-2 rounded-xl border border-[#333333] overflow-hidden bg-[#1e1e1e] shadow-lg">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#404040]">
+    <div className="rounded-xl border border-border bg-panel overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div className="flex items-center gap-2">
-          <FileJson size={13} className="text-[var(--color-warning)]" />
-          <span className="text-sm font-mono text-[#cccccc] uppercase ">JSON</span>
+          <FileJson size={13} className="text-text-dim" />
+          <span className="text-sm font-mono text-text-dim uppercase">Data</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-1 text-sm font-mono text-[#cccccc] hover:text-white cursor-pointer"
-          >
-            {collapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-            {collapsed ? 'EXPAND' : 'COLLAPSE'}
-          </button>
-          <div className="w-px h-3 bg-[#404040] mx-1"></div>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(formatted)
-              setCopied(true)
-              setTimeout(() => setCopied(false), 2000)
-            }}
-            className="flex items-center gap-1.5 text-sm font-mono text-[#cccccc] hover:text-white transition-all cursor-pointer"
-          >
-            {copied ? <CheckCircle size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
-            {copied ? 'COPIED' : 'COPY'}
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(formatted)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          }}
+          className="flex items-center gap-1.5 text-sm font-mono text-text-dim hover:text-text-secondary transition-colors cursor-pointer"
+        >
+          {copied ? <CheckCircle size={12} className="text-success" /> : <Copy size={12} />}
+          {copied ? 'COPIED' : 'COPY'}
+        </button>
       </div>
-      {!collapsed && (
-        <pre className="p-4 overflow-x-auto text-[13px] font-mono text-[#ce9178] leading-relaxed max-h-80">
-          <code>{formatted}</code>
-        </pre>
-      )}
+      <div className="p-4">
+        {parsed !== null ? <JsonValue value={parsed} depth={0} /> : (
+          <p className="text-sm text-text-secondary whitespace-pre-wrap break-words">{formatted}</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -252,13 +304,13 @@ function DataUriRenderer({ content }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 px-4 py-2.5 bg-[rgba(0,0,0,0.4)] border-b border-[var(--color-border)] rounded-t-xl">
-        <Package size={13} className="text-[var(--color-warning)]" />
+      <div className="flex items-center gap-2 px-4 py-2.5 bg-panel-light border-b border-[var(--color-border)] rounded-t-xl">
+        <Package size={13} className="text-text-dim" />
         <span className="text-sm font-mono text-[var(--color-text-dim)] uppercase ">{mime}</span>
         <a
           href={content}
           download={`agent-output.${ext}`}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)] text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.2)] transition-all cursor-pointer"
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)] text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.16)] transition-colors cursor-pointer"
         >
           <Download size={12} />
           DOWNLOAD .{ext.toUpperCase()}
@@ -429,15 +481,13 @@ export default function OutputRenderer({ response, agentName, latency, success }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border overflow-hidden ${
-        success !== false
-          ? 'border-[rgba(52,211,153,0.25)] bg-[rgba(52,211,153,0.03)]'
-          : 'border-[rgba(248,113,113,0.25)] bg-[rgba(248,113,113,0.03)]'
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`rounded-xl border overflow-hidden bg-panel ${
+        success !== false ? 'border-border' : 'border-[rgba(193,73,73,0.35)]'
       }`}
     >
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] bg-[rgba(0,0,0,0.3)]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2">
           {success !== false
             ? <CheckCircle size={14} className="text-[var(--color-success)]" />
@@ -448,7 +498,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-[rgba(255,255,255,0.04)] border border-[var(--color-border)]">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--color-border)]">
           <MetaIcon size={11} className={meta.color} />
           <span className={`text-xs font-bold ${meta.color}`}>{meta.label}</span>
         </div>

@@ -11,7 +11,6 @@ import {
   Table, Lock, ShoppingCart, Loader2, DollarSign
 } from 'lucide-react'
 import NeonButton from '../components/ui/NeonButton'
-import TerminalBox from '../components/ui/TerminalBox'
 import MetricBadge from '../components/ui/MetricBadge'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import ReviewSection from '../components/ui/ReviewSection'
@@ -92,7 +91,7 @@ function CodeBlock({ code, lang }) {
   const detectedLang = lang || detectLang(code)
   const langColors = { python: '#3572A5', javascript: '#f1e05a', solidity: '#AA6746', html: '#e34c26', sql: '#e38c00', rust: '#dea584', go: '#00ADD8', java: '#b07219', json: '#40c4ff', code: '#9e9e9e' }
   return (
-    <div className="my-4 rounded-xl overflow-hidden shadow-xl" style={{ border: '1px solid #2d2d2d' }}>
+    <div className="my-4 rounded-xl overflow-hidden" style={{ border: '1px solid #2d2d2d' }}>
       <div className="flex items-center justify-between px-4 py-2.5" style={{ background: '#1e1e1e', borderBottom: '1px solid #2d2d2d' }}>
         <div className="flex items-center gap-2.5">
           <div className="flex gap-1.5">
@@ -138,7 +137,7 @@ function TableBlock({ rows, isMarkdown }) {
   const headers = parseRow(rows[0])
   const dataRows = isMarkdown ? rows.slice(1).filter(r => !/^\s*\|[\s\-:|]+\|\s*$/.test(r)) : rows.slice(1)
   return (
-    <div className="my-4 rounded-xl overflow-hidden shadow-xl" style={{ border: '1px solid #2d2d2d' }}>
+    <div className="my-4 rounded-xl overflow-hidden" style={{ border: '1px solid #2d2d2d' }}>
       <div className="flex items-center justify-between px-4 py-2.5" style={{ background: '#1e1e1e', borderBottom: '1px solid #2d2d2d' }}>
         <div className="flex items-center gap-2">
           <Table size={13} style={{ color: '#4ec9b0' }} />
@@ -278,8 +277,8 @@ function ReadableOutput({ response, success }) {
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-      className={`rounded-xl border overflow-hidden ${success !== false ? 'border-[rgba(147,197,253,0.2)] bg-[rgba(147,197,253,0.02)]' : 'border-[rgba(248,113,113,0.2)] bg-[rgba(248,113,113,0.02)]'}`}>
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] bg-[rgba(0,0,0,0.35)]">
+      className={`relative group rounded-xl border overflow-hidden ${success !== false ? 'border-[rgba(147,197,253,0.2)] bg-[rgba(147,197,253,0.02)]' : 'border-[rgba(248,113,113,0.2)] bg-[rgba(248,113,113,0.02)]'}`}>
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-panel-light)]">
         <FileText size={13} className="text-[var(--color-star-blue)]" />
         <span className="text-sm font-bold text-[var(--color-star-blue)] ">READABLE OUTPUT</span>
         <button onClick={() => { navigator.clipboard.writeText(plainText); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
@@ -307,6 +306,15 @@ function ReadableOutput({ response, success }) {
           }
         })}
       </div>
+<div className="pointer-events-none absolute top-0 right-0 w-24 h-24 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+  <div
+    className="w-full h-full"
+    style={{
+      background: "rgba(168,85,247,0.25)",
+      borderBottomLeftRadius: "100%"
+    }}
+  />
+</div>
     </motion.div>
   )
 }
@@ -528,7 +536,7 @@ function BlockchainPurchasePanel({ agent, onSuccess, pendingTx }) {
 function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth, onPurchase, isPurchasing, error, pendingTx }) {
   const { isConnected } = useAccount()
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center text-center py-6">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center text-center py-6">
       <div className="w-16 h-16 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.25)] flex items-center justify-center mb-6">
         <Lock size={32} className="text-[var(--color-primary)]" />
       </div>
@@ -559,8 +567,8 @@ function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth,
           { id: 'monthly', label: '30 DAYS', price: monthlyEth, period: 0, color: 'purple' },
           { id: 'yearly', label: '365 DAYS', price: yearlyEth, period: 1, color: 'success' },
         ].map(opt => (
-          <motion.button key={opt.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setPurchaseType(opt.id)}
-            className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${purchaseType === opt.id ? opt.color === 'purple' ? 'bg-[rgba(124,58,237,0.15)] border-[var(--color-primary)]' : 'bg-[rgba(52,211,153,0.15)] border-[var(--color-success)]' : 'border-[var(--color-border)] bg-black/20'}`}>
+          <motion.button key={opt.id} onClick={() => setPurchaseType(opt.id)}
+            className={`p-4 rounded-xl border text-center transition-colors duration-150 cursor-pointer ${purchaseType === opt.id ? opt.color === 'purple' ? 'bg-[rgba(124,58,237,0.1)] border-[var(--color-primary)]' : 'bg-[rgba(52,211,153,0.1)] border-[var(--color-success)]' : 'border-[var(--color-border)] bg-bg-secondary'}`}>
             <div className="text-sm font-mono text-[var(--color-text-dim)] mb-2">{opt.label}</div>
             <div className={`text-xl font-bold font-display ${opt.color === 'purple' ? 'text-[var(--color-primary)]' : 'text-[var(--color-success)]'}`}>
               {opt.price} <span className="text-xs">0G</span>
@@ -630,8 +638,6 @@ function UpvoteButton({ agentId, contractAgentId, ownerWallet, initialUpvotes, w
         </div>
       )}
       <motion.button
-        whileHover={!hasUpvoted && !isOwner && isConnected ? { scale: 1.02 } : {}}
-        whileTap={!hasUpvoted && !isOwner && isConnected ? { scale: 0.98 } : {}}
         onClick={handleUpvote}
         disabled={isUpvoting || hasUpvoted || isOwner || !isConnected || statusLoading}
         className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all font-mono text-xs cursor-pointer disabled:cursor-not-allowed ${
@@ -819,7 +825,7 @@ function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync
 
 export default function AgentDetail() {
   const { id } = useParams()
-  const { logs, addLog, clearLogs, isExecuting, setExecuting, executionResult, setResult } = useInteractionStore()
+  const { addLog, clearLogs, isExecuting, setExecuting, executionResult, setResult } = useInteractionStore()
   const { address, isConnected, chain } = useAccount()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
@@ -1147,7 +1153,7 @@ console.log('========================================\n')
     <div className="relative min-h-screen bg-[var(--color-bg)]">
       {toastMessage && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg text-sm shadow-lg backdrop-blur-md ${toastMessage.type === 'success' ? 'bg-[rgba(52,211,153,0.15)] border border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[rgba(248,113,113,0.15)] border border-[var(--color-danger)] text-[var(--color-danger)]'}`}>
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg text-sm ${toastMessage.type === 'success' ? 'bg-[rgba(52,211,153,0.15)] border border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[rgba(248,113,113,0.15)] border border-[var(--color-danger)] text-[var(--color-danger)]'}`}>
           {toastMessage.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
           {toastMessage.msg}
         </motion.div>
@@ -1157,53 +1163,38 @@ console.log('========================================\n')
 
       <div className="relative z-10 p-5 lg:p-8 max-w-7xl mx-auto">
         <Link to="/explorer">
-          <motion.div whileHover={{ x: -4 }} className="inline-flex items-center gap-2 text-[var(--color-text-dim)] hover:text-[var(--color-primary)] text-[11px] font-mono  mb-6 transition-colors cursor-pointer group">
-            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+          <motion.div className="inline-flex items-center gap-2 text-[var(--color-text-dim)] hover:text-[var(--color-primary)] text-[11px] font-mono  mb-6 transition-colors cursor-pointer group">
+            <ArrowLeft size={14} />
             BACK TO EXPLORER
           </motion.div>
         </Link>
 
         {/* Hero */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <div className="glass-card-landing rounded-2xl p-6 sm:p-8 relative overflow-hidden ">
-            <div className="absolute top-0 right-0 w-[300px] h-[200px] rounded-full pointer-events-none" />
-            <div className="relative z-10 flex flex-col lg:flex-row items-start gap-6">
-              <motion.div whileHover={{ scale: 1.05 }} className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[var(--color-accent-pink)] border border-[#d9b6c9] flex items-center justify-center shrink-0">
-                <Cpu size={32} className="text-[var(--color-primary)]" />
-              </motion.div>
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-3 mb-3">
-                  <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[var(--color-text-primary)] tracking-tight">{agent.name}</h1>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)]">
-                    <span className="w-2 h-2 rounded-full bg-[var(--color-success)] pulse-dot" />
-                    <span className="text-sm font-mono text-[var(--color-success)]  font-bold">{(agent.status || 'ACTIVE').toUpperCase()}</span>
-                  </div>
-                  {isBlockchainAgent && <span className="px-2 py-1 rounded text-xs font-mono bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.3)] text-[var(--color-primary)]">ON-CHAIN</span>}
-                </div>
-                <p className="text-[var(--color-text-secondary)] text-sm sm:text-base mb-4 leading-relaxed max-w-2xl">{agent.description}</p>
-                <div className="flex flex-wrap gap-2 mb-5">
-                  {(agent.tags || []).map(tag => <span key={tag} className="px-3 py-1 rounded-lg text-sm font-mono bg-[rgba(124,58,237,0.06)] border border-[rgba(124,58,237,0.15)] text-[var(--color-purple-pale)]">#{tag}</span>)}
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-sm font-mono text-[var(--color-text-dim)]">
-                  <span>OWNER: <span className="text-[var(--color-primary)]">{agent.ownerWallet?.slice(0, 12) || '0xUNKNOWN'}...</span></span>
-                  <span>CATEGORY: <span className="text-[var(--color-text-muted)]">{agent.category || 'N/A'}</span></span>
-                  <span>MONTHLY: <span className="text-[var(--color-primary)]">{monthlyEth} 0G</span></span>
-                </div>
+        <div className="mb-8 pb-8 border-b border-border">
+          <div className="flex flex-col lg:flex-row items-start gap-6">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[var(--color-accent-pink)] border border-[#d9b6c9] flex items-center justify-center shrink-0">
+              <Cpu size={32} className="text-[var(--color-primary)]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <h1 className="font-display font-extrabold text-2xl sm:text-3xl lg:text-4xl text-[var(--color-text-primary)] tracking-tight">{agent.name}</h1>
+                <span className="text-sm font-mono font-bold text-text-dim">
+                  {(agent.status || 'ACTIVE').toUpperCase()}
+                  {isBlockchainAgent && <> &bull; ON-CHAIN</>}
+                </span>
+              </div>
+              <p className="text-[var(--color-text-secondary)] text-sm sm:text-base mb-4 leading-relaxed max-w-2xl">{agent.description}</p>
+              <div className="flex flex-wrap gap-2 mb-5">
+                {(agent.tags || []).map(tag => <span key={tag} className="text-sm font-mono text-text-dim">#{tag}</span>)}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-sm font-mono text-[var(--color-text-dim)]">
+                <span>OWNER: <span className="text-[var(--color-primary)]">{agent.ownerWallet?.slice(0, 12) || '0xUNKNOWN'}...</span></span>
+                <span>CATEGORY: <span className="text-[var(--color-text-muted)]">{agent.category || 'N/A'}</span></span>
+                <span>MONTHLY: <span className="text-[var(--color-primary)]">{monthlyEth} 0G</span></span>
               </div>
             </div>
-            {/* <div className="relative z-10 mt-6 flex items-center gap-3 p-3 rounded-xl bg-black/30 border border-[var(--color-border)] font-semibold text-base">
-              <ExternalLink size={13} className="text-[var(--color-text-dim)] shrink-0" />
-              <span className="text-[var(--color-text-muted)] flex-1 truncate">
-                {userHasAccess ? agent.endpoint : '****** (LOCKED — purchase access to reveal) ******'}
-              </span>
-              {userHasAccess && (
-                <button onClick={copyEndpoint} className="text-[var(--color-text-dim)] hover:text-[var(--color-primary)] transition-colors cursor-pointer p-1">
-                  {copied ? <CheckCircle size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-                </button>
-              )}
-            </div> */}
           </div>
-        </motion.div>
+        </div>
 
         {/* Metrics */}
         <FadeInSection className="mb-8">
@@ -1222,12 +1213,12 @@ console.log('========================================\n')
         </FadeInSection>
 
         {/* Tabs */}
-        <div className="flex gap-0 mb-6 glass-card-landing rounded-xl overflow-hidden border border-[var(--color-border)]">
+        <div className="flex gap-6 mb-6 border-b border-border">
           {TABS.map(tab => {
             const Icon = tab.icon
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 font-semibold text-sm  border-b-2 transition-all cursor-pointer ${activeTab === tab.id ? 'border-[var(--color-primary)] text-[var(--color-primary)] bg-[rgba(124,58,237,0.08)]' : 'border-transparent text-[var(--color-text-dim)] hover:text-[var(--color-text-secondary)] hover:bg-[rgba(255,255,255,0.02)]'}`}>
+                className={`flex items-center gap-2 py-3 -mb-px font-semibold text-sm border-b-2 transition-colors duration-150 cursor-pointer ${activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-text-dim hover:text-text-secondary'}`}>
                 <Icon size={13} />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
@@ -1254,14 +1245,11 @@ console.log('========================================\n')
                           <Loader2 size={24} className="animate-spin text-[var(--color-primary)]" />
                         </motion.div>
                       ) : userHasAccess ? (
-                        <motion.div key="execute" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                        <motion.div key="execute" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                           <h2 className="font-display font-bold text-base sm:text-lg text-[var(--color-text-primary)] mb-5 flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.2)] flex items-center justify-center">
-                              <Terminal size={16} className="text-[var(--color-primary)]" />
-                            </div>
-                            EXECUTION CONSOLE
+                            RUN AGENT
                             {execConfig && (
-                              <span className="ml-2 text-xs font-mono px-2 py-0.5 rounded bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.25)] text-[var(--color-primary)]">
+                              <span className="ml-2 text-xs font-mono text-text-dim">
                                 DYNAMIC SCHEMA
                               </span>
                             )}
@@ -1282,7 +1270,7 @@ console.log('========================================\n')
                             <>
                               <div className="mb-5">
                                 <label className="text-xs font-mono text-[var(--color-text-dim)] uppercase block mb-2">TASK INPUT</label>
-                                <textarea value={task} onChange={e => setTask(e.target.value)} placeholder="Describe the task for this agent..." rows={4} className="input-field w-full px-4 py-3 rounded-xl text-sm resize-none" />
+                                <textarea value={task} onChange={e => setTask(e.target.value)} placeholder="Describe the task for this agent..." rows={4} className="input-field w-full px-5 py-4 rounded-xl text-sm resize-none" />
                               </div>
                               <div className="flex items-center justify-between gap-4">
                                 <div className="text-sm font-mono text-[var(--color-text-dim)]">
@@ -1297,7 +1285,7 @@ console.log('========================================\n')
                           )}
                         </motion.div>
                       ) : (
-                        <motion.div key="paywall" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                        <motion.div key="paywall" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                           {isBlockchainAgent
                             ? <BlockchainPurchasePanel agent={agent} onSuccess={handlePurchaseSuccess} pendingTx={pendingTx} />
                             : <DbPurchasePanel agent={agent} onSuccess={handlePurchaseSuccess} pendingTx={pendingTx} />
@@ -1306,11 +1294,6 @@ console.log('========================================\n')
                       )}
                     </AnimatePresence>
                   </div>
-                </FadeInSection>
-
-                {/* Execution Logs */}
-                <FadeInSection delay={0.1}>
-                  <TerminalBox logs={logs} title={userHasAccess ? 'EXECUTION LOG' : 'SYSTEM LOGS'} />
                 </FadeInSection>
 
                 {userHasAccess && (
@@ -1408,9 +1391,6 @@ console.log('========================================\n')
                       <a href={executionResult.download.url} download={executionResult.download.filename} className="inline-block px-4 py-2 rounded bg-[var(--color-primary)] text-white text-sm">Download {executionResult.download.filename}</a>
                     </div>
                   )}
-
-                  {/* Readable Output — full width */}
-                  <ReadableOutput response={executionResult.output} success={executionResult.success} />
 
                   {/* Execution complete JSON — full width */}
                   <OutputRenderer

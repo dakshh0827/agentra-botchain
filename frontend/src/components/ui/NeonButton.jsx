@@ -31,8 +31,7 @@ export default function NeonButton({
   return (
     <motion.button
       type={type}
-      whileHover={{ scale: disabled ? 1 : 1.02 }}
-      whileTap={{ scale: disabled ? 1 : 0.97 }}
+      whileTap={{ opacity: disabled ? 1 : 0.85 }}
       onClick={onClick}
       disabled={disabled || loading}
       className={clsx(

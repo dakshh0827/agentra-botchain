@@ -43,9 +43,7 @@ export default function AgentCard({ agent, index = 0 }) {
         <motion.div
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
-          whileHover={{ y: -2 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-          className="h-full rounded-xl border border-border bg-panel px-4 py-4 overflow-visible flex flex-col"
+          className="h-full rounded-xl border border-border bg-panel px-4 py-4 overflow-visible flex flex-col hover:border-primary-light transition-colors duration-150"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">

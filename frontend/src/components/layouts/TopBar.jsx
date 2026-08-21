@@ -50,7 +50,7 @@ export default function TopBar() {
 
   return (
     <header
-      className="h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 border-b border-border shadow-sm"
+      className="h-14 flex items-center justify-between px-4 sm:px-6 shrink-0 z-10 border-b border-border"
       style={{ background: 'var(--color-panel)' }}
     >
       {/* Left */}
@@ -76,7 +76,7 @@ export default function TopBar() {
           {statsLoading ? (
             <Loader2 size={12} className="animate-spin text-primary" />
           ) : (
-            <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot shadow-[0_0_8px_rgba(47,141,99,0.6)]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
           )}
           {statsLoading ? 'Loading' : `${stats?.activeAgents ?? 0} Online`}
         </motion.div>
@@ -93,7 +93,7 @@ export default function TopBar() {
             onClick={() => disconnect()}
             className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-primary-light bg-accent-pink/50 text-primary-dark hover:border-primary hover:bg-accent-pink transition-all shadow-soft cursor-pointer"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot shadow-[0_0_8px_rgba(47,141,99,0.6)]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
             <span className="text-xs font-mono font-bold tracking-tight">
               {`${address.slice(0, 6)}...${address.slice(-4)}`}
             </span>

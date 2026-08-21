@@ -181,13 +181,12 @@ export default function Explorer() {
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredAgents.map((agent, idx) => (
                       <Link key={agent.id || agent.agentId || idx} to={`/agent/${getAgentExternalId(agent)}`}>
-                        <motion.div 
-                          whileHover={{ y: -4 }}
-                          className="rounded-xl border border-border bg-panel p-5 flex flex-col h-full hover:border-primary/50 hover:shadow-[0_0_15px_rgba(124,58,237,0.1)] transition-all duration-200 group relative overflow-hidden"
+                        <motion.div
+                          className="rounded-xl border border-border bg-panel p-5 flex flex-col h-full hover:border-primary/50 transition-colors duration-150 group relative overflow-hidden"
                         >
                           {/* Tech Accents */}
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-full -z-10 group-hover:bg-primary/10 transition-colors" />
-                          
+                          <div className="absolute top-0 right-0 w-16 h-16 bg-primary/15 rounded-bl-full opacity-0 group-hover:opacity-100 transition-opacity" />
+
                           <div className="flex justify-between items-start mb-3 gap-2">
                             <h3 className="font-bold text-lg text-text-primary line-clamp-1 group-hover:text-primary transition-colors font-display">
                               {agent.name}
