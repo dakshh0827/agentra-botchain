@@ -1,8 +1,4 @@
 import api from './axios'
-
-// Headers that prevent the browser from ever caching a response.
-// Applied to wallet-sensitive endpoints (access check, upvote status)
-// so switching accounts always fetches fresh data from the server.
 const NO_CACHE = {
   headers: {
     'Cache-Control': 'no-cache',
@@ -16,7 +12,24 @@ export const agentsAPI = {
   // ─────────────────────────────────────────────
   getAll: (params) => api.get('/agents', { params }),
 
+  
+  getOfficial: (limit = 6) =>
+    api.get('/agents', { params: { official: 'true', sortBy: 'newest', limit } }),
+
   getById: (id) => api.get(`/agents/${id}`),
+
+
+  chat: (agentId, question, reportId) =>
+    api.post(`/agents/${agentId}/chat`, { question, reportId }, { timeout: 90000 }),
+
+  getConversation: (agentId) =>
+    api.get(`/agents/${agentId}/conversation`, NO_CACHE),
+
+  clearConversation: (agentId) =>
+    api.delete(`/agents/${agentId}/conversation`),
+
+  myConversations: () => api.get('/agents/conversations', NO_CACHE),
+
 
   search: (query) => api.get('/agents/search', { params: { q: query } }),
 

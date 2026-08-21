@@ -11,7 +11,7 @@ const api = axios.create({
   },
 })
 
-function extractWalletFromStorage() {
+export function extractWalletFromStorage() {
   const direct = localStorage.getItem('wallet-address')
   if (/^0x[a-fA-F0-9]{40}$/.test(direct || '')) {
     return direct.toLowerCase()

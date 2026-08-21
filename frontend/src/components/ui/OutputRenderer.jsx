@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, Download, Code, Image, Table, CheckCircle,
   Clock, Copy, ChevronDown, ChevronUp, ExternalLink,
-  FileCode, FileJson, AlertCircle, Package
+  FileCode, FileJson, AlertCircle, Package, FileSpreadsheet
 } from 'lucide-react'
 
 // ── Code Block Component (VS Code Dark+ Theme) ──────────────────
@@ -130,8 +130,30 @@ function InlineCsvTable({ content }) {
 }
 
 // ── Type Detection ────────────────────────────────────────────
+function parseJsonPayload(response) {
+  if (!response) return null
+  if (typeof response === 'object') return response
+  try {
+    const parsed = JSON.parse(typeof response === 'string' ? response : String(response))
+    return typeof parsed === 'object' && parsed ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function isSeoAuditPayload(obj) {
+  return Boolean(
+    obj
+    && typeof obj.overall === 'number'
+    && (obj.reportUrl || obj.pdfUrl || obj.excelUrl || obj.csvUrl || obj.sheetsUrl || obj.artifacts)
+    && Array.isArray(obj.categories)
+  )
+}
+
 function detectOutputType(response) {
   if (!response) return 'empty'
+  const parsed = parseJsonPayload(response)
+  if (parsed && isSeoAuditPayload(parsed)) return 'seo'
   if (typeof response !== 'string') return 'json'
 
   const trimmed = response.trim()
@@ -189,6 +211,138 @@ function CodeRenderer({ content }) {
   const raw = content.replace(/^```[\w]*\n?/, '').replace(/```$/, '')
   const lang = detectLanguage(raw)
   return <SyntaxCodeBlock code={raw} lang={lang} />
+}
+
+function scoreTone(score) {
+  if (score >= 90) return 'text-emerald-400'
+  if (score >= 75) return 'text-lime-400'
+  if (score >= 60) return 'text-amber-400'
+  if (score >= 40) return 'text-orange-400'
+  return 'text-red-400'
+}
+
+function SeoAuditRenderer({ content }) {
+  const data = parseJsonPayload(content) || {}
+  const htmlUrl = data.reportUrl || data.artifacts?.html
+  const pdfUrl = data.pdfUrl || data.artifacts?.pdf
+  const excelUrl = data.excelUrl || data.artifacts?.xlsx
+  const sheetsUrl = data.sheetsUrl || data.csvUrl || data.artifacts?.csv || data.artifacts?.sheets
+  const topIssues = Array.isArray(data.topIssues) ? data.topIssues : []
+  const categories = Array.isArray(data.categories) ? data.categories : []
+  const failed = Array.isArray(data.selfCheckFailed) ? data.selfCheckFailed : []
+  const notMeasured = data.grounding?.notMeasured || []
+  const downloads = Array.isArray(data.downloads) ? data.downloads : null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="shrink-0 text-center">
+          <div className={`text-4xl font-black leading-none ${scoreTone(data.overall)}`}>
+            {data.overall}
+          </div>
+          <div className="text-[11px] font-mono text-[var(--color-text-dim)] mt-1">/ 100</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-bold text-[var(--color-text-primary)]">
+            {data.label || 'SEO audit'} · Grade {data.grade || '—'}
+          </div>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1 leading-relaxed">
+            {data.summary || data.host}
+          </p>
+          {data.sampleWarning && (
+            <p className="text-xs text-amber-300/90 mt-2">{data.sampleWarning}</p>
+          )}
+          {failed.length > 0 && (
+            <p className="text-xs text-amber-400 mt-2">
+              Consistency check failed — treat this score as provisional.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {categories.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {categories.map((cat) => (
+            <div
+              key={cat.name}
+              className="rounded-lg border border-[var(--color-border)] bg-[rgba(0,0,0,0.25)] px-3 py-2"
+            >
+              <div className={`text-lg font-black ${scoreTone(cat.score)}`}>{cat.score}</div>
+              <div className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wide">
+                {cat.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {topIssues.length > 0 && (
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-dim)] mb-2">
+            Top issues (from crawled pages)
+          </div>
+          <ul className="space-y-1.5">
+            {topIssues.map((issue, i) => (
+              <li key={i} className="text-sm text-[var(--color-text-secondary)] leading-snug">
+                <span className="font-mono text-[10px] uppercase text-red-400 mr-2">
+                  {issue.severity || 'issue'}
+                </span>
+                {issue.title}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {htmlUrl && (
+          <a href={htmlUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(147,197,253,0.1)] border border-[rgba(147,197,253,0.25)]
+                       text-[var(--color-star-blue)] hover:bg-[rgba(147,197,253,0.18)]">
+            <ExternalLink size={12} /> HTML report
+          </a>
+        )}
+        {pdfUrl && (
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.25)]
+                       text-red-300 hover:bg-[rgba(248,113,113,0.18)]">
+            <FileText size={12} /> PDF
+          </a>
+        )}
+        {excelUrl && (
+          <a href={excelUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(52,211,153,0.1)] border border-[rgba(52,211,153,0.25)]
+                       text-[var(--color-success)] hover:bg-[rgba(52,211,153,0.18)]">
+            <FileSpreadsheet size={12} /> Excel
+          </a>
+        )}
+        {sheetsUrl && (
+          <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold
+                       bg-[rgba(74,222,128,0.1)] border border-[rgba(74,222,128,0.28)]
+                       text-emerald-300 hover:bg-[rgba(74,222,128,0.18)]">
+            <Table size={12} /> Google Sheets (CSV)
+          </a>
+        )}
+      </div>
+      {downloads && (
+        <p className="text-[11px] text-[var(--color-text-dim)]">
+          Tip: open the CSV in Google Sheets via File → Import, or open directly in Excel.
+        </p>
+      )}
+
+      {notMeasured.length > 0 && (
+        <p className="text-[11px] text-[var(--color-text-dim)] leading-relaxed">
+          Not measured: {notMeasured.join(' · ')}
+        </p>
+      )}
+
+      <JsonRenderer content={content} />
+    </div>
+  )
 }
 
 function JsonRenderer({ content }) {
@@ -407,7 +561,7 @@ function MarkdownRenderer({ content }) {
 }
 
 // ── Main OutputRenderer ───────────────────────────────────────
-export default function OutputRenderer({ response, agentName, latency, success }) {
+export default function OutputRenderer({ response, latency, success }) {
   const [expanded, setExpanded] = useState(true)
   const type = useMemo(() => detectOutputType(response), [response])
 
@@ -417,6 +571,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
     text: { label: 'TEXT', icon: FileText, color: 'text-[var(--color-text-muted)]' },
     code: { label: 'CODE', icon: FileCode, color: 'text-[var(--color-primary)]' },
     json: { label: 'JSON', icon: FileJson, color: 'text-[var(--color-warning)]' },
+    seo: { label: 'SEO AUDIT', icon: FileText, color: 'text-[var(--color-star-blue)]' },
     csv: { label: 'TABLE', icon: Table, color: 'text-[var(--color-star-blue)]' },
     datauri: { label: 'FILE', icon: Download, color: 'text-[var(--color-success)]' },
     url: { label: 'URL', icon: ExternalLink, color: 'text-[var(--color-star-blue)]' },
@@ -479,6 +634,7 @@ export default function OutputRenderer({ response, agentName, latency, success }
             <div className="p-4">
               {type === 'text' && <TextRenderer content={response} />}
               {type === 'code' && <CodeRenderer content={response} />}
+              {type === 'seo' && <SeoAuditRenderer content={response} />}
               {type === 'json' && <JsonRenderer content={response} />}
               {type === 'csv' && <CsvRenderer content={response} />}
               {type === 'datauri' && <DataUriRenderer content={response} />}

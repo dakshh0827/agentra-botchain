@@ -1,14 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-// FIXED: Added Database, Shield, Tag, and ShieldCheck to the imports
-import { Search, SlidersHorizontal, RefreshCw, Activity, Cpu, Database, Shield, Tag, ShieldCheck, Loader2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Search, SlidersHorizontal, RefreshCw, Activity, Cpu, Database, Loader2, LayoutGrid, ArrowUpRight } from 'lucide-react'
+import { useAccount } from 'wagmi'
 import LoadingPulse from '../components/ui/LoadingPulse'
 import NeonButton from '../components/ui/NeonButton'
+import OfficialAgentStrip from '../components/ui/OfficialAgentStrip'
+import TryAgentModal from '../components/ui/TryAgentModal'
+import AgentPreviewModal from '../components/ui/AgentPreviewModal'
 import { useAgents } from '../hooks/useAgents'
 import { useMarketplaceStore } from '../stores/marketplaceStore'
 import { analyticsAPI } from '../api/analytics'
 import { getAgentExternalId } from '../utils/helpers'
+import {
+  detailsBtnClass,
+  tryBtnClass,
+  featuresBtnClass,
+  agentCardShellClass,
+} from '../utils/agentCardChrome'
+import AgentAvatar from '../components/ui/AgentAvatar'
+import { Link } from 'react-router-dom'
 
 const CATEGORIES = ['all', 'Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']
 
@@ -22,9 +32,11 @@ const SORT_OPTIONS = [
 export default function Explorer() {
   const { agents, isLoading } = useAgents()
   const { filters, search, setFilter, setSearch } = useMarketplaceStore()
+  const { isConnected } = useAccount()
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [searchInput, setSearchInput] = useState(search)
+  const [tryAgent, setTryAgent] = useState(null)
 
   useEffect(() => {
     setStatsLoading(true)
@@ -39,7 +51,7 @@ export default function Explorer() {
     return () => clearTimeout(t)
   }, [searchInput, setSearch])
 
-  const list = Array.isArray(agents) ? agents : []
+  const list = useMemo(() => (Array.isArray(agents) ? agents : []), [agents])
 
   const filteredAgents = useMemo(() => {
     return list
@@ -52,7 +64,10 @@ export default function Explorer() {
           (a.tags || []).some((t) => t.toLowerCase().includes(q))
 
         const matchCat = !filters.category || filters.category === 'all' || a.category === filters.category
-        return matchSearch && matchCat
+        // First-party agents have their own shelf above this grid. Leaving them in as
+        // well put the same card on screen twice, which reads as a duplicate record
+        // rather than as a feature.
+        return matchSearch && matchCat && !a.isOfficial
       })
       .sort((a, b) => {
         // FIXED: Mapped the new technical sort values to your actual data fields
@@ -64,10 +79,10 @@ export default function Explorer() {
   }, [filters.category, filters.sortBy, list, search])
 
   return (
-    <div className="min-h-screen bg-bg text-text-primary px-4 sm:px-6 lg:px-8 py-7">
-      <div className="max-w-7xl mx-auto">
+    <div className="h-full flex flex-col overflow-hidden bg-bg text-text-primary px-4 sm:px-6 lg:px-8 py-7">
+      <div className="max-w-7xl w-full mx-auto flex flex-col flex-1 min-h-0">
         {/* HEADER */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
+        <div className="shrink-0 flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
           <div>
             <p className="text-xs uppercase tracking-wide text-text-dim font-semibold">0G Network Infrastructure</p>
             <h1 className="font-display font-bold text-4xl sm:text-5xl lg:text-6xl text-text-primary leading-tight">
@@ -77,9 +92,9 @@ export default function Explorer() {
           <div className="text-xs font-medium text-text-dim">{filteredAgents.length} indexed contracts</div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* SIDEBAR CONTROLS */}
-          <aside className="lg:col-span-3 rounded-xl border border-border bg-panel p-5 sticky top-16 shadow-sm">
+          <aside className="lg:col-span-3 rounded-xl border border-border bg-panel p-5 shadow-sm overflow-y-auto min-h-0">
             <div className="flex items-center gap-2 text-sm font-bold mb-4">
               <SlidersHorizontal size={16} className="text-primary" /> Filters & Sort
             </div>
@@ -149,9 +164,9 @@ export default function Explorer() {
           </aside>
 
           {/* MAIN CONTENT AREA */}
-          <section className="lg:col-span-9 space-y-6">
-            {/* STATS BAR */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <section className="lg:col-span-9 flex flex-col min-h-0">
+            {/* Fixed: these three stay while the agents below them scroll. */}
+            <div className="shrink-0 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
                 { icon: Database, label: 'Deployed Contracts', value: stats?.totalAgents ?? list.length },
                 { icon: Activity, label: 'Live Endpoints', value: stats?.activeAgents ?? 0 },
@@ -172,6 +187,12 @@ export default function Explorer() {
               })}
             </div>
 
+            {/* The only scroller on the page: the agents themselves. Everything above
+                stays put, which is what makes the header and stats read as furniture
+                rather than as content that happens to be at the top. */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 mt-6 space-y-6">
+            <OfficialAgentStrip variant="compact" limit={4} />
+
             {/* AGENT CARDS GRID */}
             {isLoading ? (
               <LoadingPulse />
@@ -180,59 +201,73 @@ export default function Explorer() {
                 {filteredAgents.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {filteredAgents.map((agent, idx) => (
-                      <Link key={agent.id || agent.agentId || idx} to={`/agent/${getAgentExternalId(agent)}`}>
-                        <motion.div 
-                          whileHover={{ y: -4 }}
-                          className="rounded-xl border border-border bg-panel p-5 flex flex-col h-full hover:border-primary/50 hover:shadow-[0_0_15px_rgba(124,58,237,0.1)] transition-all duration-200 group relative overflow-hidden"
-                        >
-                          {/* Tech Accents */}
-                          <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-full -z-10 group-hover:bg-primary/10 transition-colors" />
-                          
+                      <motion.div
+                        key={agent.id || agent.agentId || idx}
+                        whileHover={{ y: -4 }}
+                        onClick={(e) => {
+                          if (isConnected) return
+                          if (e.target.closest('a, button')) return
+                          setTryAgent(agent)
+                        }}
+                        className={`${agentCardShellClass} ${!isConnected ? 'cursor-pointer' : ''}`}
+                      >
+                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c9a8f0] to-transparent opacity-70" />
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.05] rounded-bl-full -z-10 group-hover:bg-primary/10 transition-colors" />
+
                           <div className="flex justify-between items-start mb-3 gap-2">
-                            <h3 className="font-bold text-lg text-text-primary line-clamp-1 group-hover:text-primary transition-colors font-display">
-                              {agent.name}
-                            </h3>
-                            <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 border border-success/20 rounded text-success">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="shrink-0 rounded-[11px] overflow-hidden shadow-sm ring-1 ring-[#e6dcf2]">
+                                <AgentAvatar agent={agent} size={38} muted />
+                              </div>
+                              <h3 className="font-bold text-lg text-text-primary line-clamp-1 group-hover:text-primary transition-colors font-display">
+                                {agent.name}
+                              </h3>
+                            </div>
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 border border-success/20 rounded-lg text-success">
                               <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
                               <span className="text-[9px] uppercase font-bold tracking-wider whitespace-nowrap">
-                                99.9% Uptime
+                                Live
                               </span>
                             </div>
                           </div>
-                          
+
                           <p className="text-sm text-text-secondary line-clamp-2 mb-4 grow leading-relaxed">
                             {agent.description || "No execution schema provided for this node."}
                           </p>
 
-                          {/* Deployer Address */}
-                          <div className="mb-4 p-2.5 bg-bg-secondary rounded-lg border border-border/50">
+                          <div className="mb-4 p-2.5 bg-bg-secondary/80 rounded-xl border border-[#ebe3f4]">
                             <div className="flex justify-between items-center mb-1">
                               <p className="text-[10px] uppercase tracking-wider text-text-dim font-semibold">Deployer</p>
                               <span className="text-[9px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-mono">0G Network</span>
                             </div>
                             <p className="font-mono text-xs text-text-primary break-all opacity-80">
-                              {agent.deployerAddress || ''}
+                              {agent.deployerAddress || '—'}
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between text-xs text-text-dim pt-4 border-t border-border/60 font-mono">
-                            <div className="flex items-center gap-4">
-                              <span className="flex items-center gap-1.5" title="Total Computations">
-                                <Cpu size={14} className="text-primary/70" />
-                                <span>{agent.calls || 0} execs</span>
-                              </span>
-                              <span className="flex items-center gap-1.5" title="Category Tag">
-                                <Tag size={14} className="text-text-dim" />
-                                <span>{agent.category}</span>
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 font-semibold text-text-primary">
-                              <ShieldCheck size={14} className="text-success" />
-                              Verified
-                            </div>
+                          <div className="flex items-center justify-end gap-2 pt-4 border-t border-[#ebe3f4]">
+                              <Link
+                                to={`/agent/${getAgentExternalId(agent)}`}
+                                className={detailsBtnClass}
+                              >
+                                Details
+                                <ArrowUpRight size={12} />
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => setTryAgent(agent)}
+                                className={isConnected ? tryBtnClass : featuresBtnClass}
+                              >
+                                {isConnected ? (
+                                  'Try now →'
+                                ) : (
+                                  <>
+                                    <LayoutGrid size={12} /> Features
+                                  </>
+                                )}
+                              </button>
                           </div>
-                        </motion.div>
-                      </Link>
+                      </motion.div>
                     ))}
                   </div>
                 ) : (
@@ -255,9 +290,21 @@ export default function Explorer() {
                 )}
               </>
             )}
+            </div>
           </section>
         </div>
       </div>
+
+      <TryAgentModal
+        agent={tryAgent}
+        open={!!tryAgent && isConnected}
+        onClose={() => setTryAgent(null)}
+      />
+      <AgentPreviewModal
+        agent={tryAgent}
+        open={!!tryAgent && !isConnected}
+        onClose={() => setTryAgent(null)}
+      />
     </div>
   )
 }
