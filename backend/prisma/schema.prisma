@@ -78,11 +78,28 @@ model User {
   upvotes       AgentUpvote[]
   reviews       Review[]
   reviewLikes   ReviewLike[]
+  conversations AgentConversation[]
 }
 
-//////////////////////////////////////////////////
-// AGENT
-//////////////////////////////////////////////////
+
+model AgentConversation {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [agentId])
+
+  callerWallet  String
+  caller        User     @relation(fields: [callerWallet], references: [walletAddress])
+  messages      Json
+  lastMessage   String?
+  messageCount  Int      @default(0)
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([agentId, callerWallet])
+  @@index([callerWallet, lastMessageAt])
+}
+//agent
 
 model Agent {
   id              String        @id @default(auto()) @map("_id") @db.ObjectId
@@ -126,6 +143,8 @@ model Agent {
   executionConfig Json?
   encryptedLlmKey String?       // AES-256-GCM ciphertext "iv:authTag:data" (hex), server-managed key only
   isVerified      Boolean       @default(false)
+ 
+  isOfficial      Boolean       @default(false)
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -137,6 +156,7 @@ model Agent {
   metrics         UsageMetrics?
   upvoteRecords   AgentUpvote[]
   reviews         Review[]
+  conversations   AgentConversation[]
   outgoingMessages AgentCommsMessage[] @relation("AgentCommsFrom")
   incomingMessages AgentCommsMessage[] @relation("AgentCommsTo")
 
@@ -145,9 +165,9 @@ model Agent {
   @@index([category])
 }
 
-//////////////////////////////////////////////////
+
 // AGENT-TO-AGENT COMMUNICATION LOG
-//////////////////////////////////////////////////
+
 
 model AgentCommsMessage {
   id               String            @id @default(auto()) @map("_id") @db.ObjectId
