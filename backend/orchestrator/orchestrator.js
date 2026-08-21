@@ -452,7 +452,14 @@ async _callAgentEndpoint(endpoint, task, meta = {}, executionConfig = null, runt
     const { buildExecutionRequest } = await import('../utils/buildExecutionRequest.js')
     const { redactHeaders } = await import('../utils/redactSecrets.js')
 
-    const reqConfig = buildExecutionRequest(baseEndpoint, executionConfig, runtimePayload, task)
+    const { decryptLlmKey: decryptSecretValue } = await import('../utils/cryptoKey.js')
+    const decryptField = (f) => (f.secret && !f.userProvided && f.value) ? { ...f, value: decryptSecretValue(f.value) } : f
+    const decryptedExecutionConfig = {
+      ...executionConfig,
+      headers: (executionConfig.headers || []).map(decryptField),
+      bodyFields: (executionConfig.bodyFields || []).map(decryptField),
+    }
+    const reqConfig = buildExecutionRequest(baseEndpoint, decryptedExecutionConfig, runtimePayload, task)
     const candidateUrls = reqConfig.candidateUrls?.length > 0 ? reqConfig.candidateUrls : [reqConfig.url]
 
     console.log(`[ORCHESTRATOR] Schema-driven execution: ${candidateUrls[0]}`)

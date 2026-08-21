@@ -255,9 +255,6 @@ export default function DeployStudio() {
     name: '',
     category: '',
     endpoint: '',
-    llmApiKey: '',
-    provider: 'anthropic',
-    providerBaseUrl: '',
     mcpSchema: '',
     description: '',
     tags: '',
@@ -274,8 +271,6 @@ export default function DeployStudio() {
       bodyFields: [],
     },
   })
-
-  const [showLlmKey, setShowLlmKey] = useState(false)
 
   const update = (key, val) => setForm(f => ({ ...f, [key]: val }))
   const isBlockchain = form.deployMode === 'blockchain'
@@ -374,9 +369,6 @@ export default function DeployStudio() {
           : '0',
         deployMode: form.deployMode,
         executionConfig: hasExecConfig ? form.executionConfig : undefined,
-        llmApiKey: form.llmApiKey || undefined,
-        provider: form.provider,
-        providerBaseUrl: form.provider === 'openai-compatible' ? form.providerBaseUrl : undefined,
       }
 
       // ── DATABASE ONLY ──
@@ -569,7 +561,7 @@ export default function DeployStudio() {
                 return (
                   <React.Fragment key={`${s.label}-${i}`}>
                     <motion.div
-                      whileHover={isDone ? { y: -2, scale: 1.02 } : {}}
+                      
                       onClick={() => isDone && setStep(stepIndex)}
                       className={`relative flex items-center gap-2.5 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl transition-all shrink-0 ${isDone ? 'cursor-pointer' : ''} ${
                         isActive
@@ -645,7 +637,7 @@ export default function DeployStudio() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 sm:gap-5">
                     {/* Blockchain */}
-                    <motion.button whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.99 }}
+                    <motion.button 
                       onClick={() => update('deployMode', 'blockchain')}
                       className={`relative p-5 sm:p-6 rounded-2xl border text-left transition-all cursor-pointer overflow-hidden ${
                         isBlockchain ? 'bg-[rgba(124,58,237,0.1)] border-[rgba(124,58,237,0.5)]' : 'border-border hover:border-[rgba(124,58,237,0.3)] bg-bg-secondary'
@@ -679,7 +671,7 @@ export default function DeployStudio() {
                     <label className="text-xs font-mono text-text-dim uppercase block mb-3">CATEGORY</label>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5">
                       {CATEGORIES.map(cat => (
-                        <motion.button key={cat} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                        <motion.button key={cat} 
                           onClick={() => update('category', cat)}
                           className={`py-2.5 px-4 rounded-xl text-sm font-mono border transition-all cursor-pointer ${
                             form.category === cat
@@ -701,28 +693,6 @@ export default function DeployStudio() {
                     <Globe size={20} className="text-primary" /> MCP Endpoint
                   </h2>
                   <InputField label="ENDPOINT URL" field="endpoint" placeholder="https://your-agent.example.com" form={form} update={update} />
-                  <div>
-                    <label className="text-xs text-text-dim block mb-1">LLM API KEY (for local execution)</label>
-                    <div className="relative">
-                      <input type={showLlmKey ? 'text' : 'password'} value={form.llmApiKey} onChange={e => update('llmApiKey', e.target.value)}
-                        placeholder="sk-... (optional — enables buyers to run this agent locally)" className="input-field w-full px-3 py-2 rounded-lg text-sm pr-8" />
-                      <button type="button" onClick={() => setShowLlmKey(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-secondary cursor-pointer">
-                        {showLlmKey ? <EyeOff size={12} /> : <Eye size={12} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-text-dim block mb-1">LLM PROVIDER</label>
-                    <select value={form.provider} onChange={e => update('provider', e.target.value)} className="input-field w-full px-3 py-2 rounded-lg text-sm">
-                      <option value="anthropic">Anthropic</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="groq">Groq</option>
-                      <option value="openai-compatible">Other (OpenAI-compatible endpoint)</option>
-                    </select>
-                  </div>
-                  {form.provider === 'openai-compatible' && (
-                    <InputField label="PROVIDER BASE URL" field="providerBaseUrl" placeholder="https://api.your-provider.com/v1" form={form} update={update} />
-                  )}
                   <InputField label="MCP SCHEMA (JSON — optional)" field="mcpSchema" rows={8} placeholder={'{\n  "name": "my-agent",\n  "version": "1.0.0",\n  "tools": []\n}'} form={form} update={update} />
                 </div>
               )}
@@ -755,7 +725,7 @@ export default function DeployStudio() {
                     <label className="text-xs font-mono text-text-dim uppercase block mb-3">SELECT TIER</label>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {TIER_OPTIONS.map(tier => (
-                        <motion.button key={tier.tier} whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }}
+                        <motion.button key={tier.tier} 
                           onClick={() => {
                             update('tier', tier.tier)
                             update('tierIndex', tier.tierIndex)
@@ -1105,13 +1075,13 @@ export default function DeployStudio() {
         {!deployed && (
           <FadeInSection delay={0.1}>
             <div className="flex justify-between mt-6 gap-4">
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <motion.div >
                 <NeonButton variant="ghost" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || deploying}>
                   ← BACK
                 </NeonButton>
               </motion.div>
               {step < 7 && (
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <motion.div >
                   <NeonButton
                     icon={ChevronRight}
                     onClick={() => setStep(s => Math.min(7, s + 1))}

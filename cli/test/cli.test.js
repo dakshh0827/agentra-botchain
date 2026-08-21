@@ -5,6 +5,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { buildLocalRequest } from '../src/requestBuilder.js'
 
 function startMockServer() {
   const server = http.createServer(async (req, res) => {
@@ -93,6 +94,23 @@ async function runCli(args, env = {}) {
     child.on('close', (code) => resolve({ code, stdout, stderr }))
   })
 }
+
+test('buildLocalRequest includes the runtimePayload contract for schema-driven execution', () => {
+  const req = buildLocalRequest('https://example.com/api/agents/8/execute', { method: 'POST', contentType: 'json' }, {
+    headers: { 'x-test': 'abc' },
+    body: { age: '20', weight: '68', goal: 'lose' },
+  }, 'build my diet plan')
+
+  const payload = JSON.parse(req.body)
+
+  assert.equal(payload.task, 'build my diet plan')
+  assert.equal(payload.age, '20')
+  assert.equal(payload.goal, 'lose')
+  assert.deepEqual(payload.runtimePayload, {
+    headers: { 'x-test': 'abc' },
+    body: { age: '20', weight: '68', goal: 'lose' },
+  })
+})
 
 test('CLI login, whoami, agents, execute, and runtime init work end to end', async () => {
   const mock = await startMockServer()

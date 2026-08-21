@@ -75,8 +75,8 @@
      SHADOWS
   ========================= */
 
-  --shadow-soft: 0 1px 2px rgba(111, 53, 178, 0.05);
-  --shadow-panel: 0 8px 24px rgba(111, 53, 178, 0.08);
+  --shadow-soft: none;
+  --shadow-panel: none;
 }
 
 @layer base {
@@ -158,25 +158,18 @@
 }
 
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
+  0%, 100% {
+    opacity: 1;
   }
 
-  100% {
-    background-position: 200% 0;
+  50% {
+    opacity: 0.6;
   }
 }
 
 .shimmer-load {
-  background: linear-gradient(
-    90deg,
-    #f3ebdf 25%,
-    #fff7ef 50%,
-    #f3ebdf 75%
-  );
-
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
+  background: var(--color-bg-secondary);
+  animation: shimmer 1.4s ease-in-out infinite;
 }
 
 .terminal-cursor::after {
@@ -201,32 +194,6 @@
 
 @layer components {
 
-  /* Brand Gradients */
-
-  .bg-brand-gradient {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary-light),
-      var(--color-primary),
-      var(--color-primary-dark),
-      var(--color-primary-deep)
-    );
-  }
-
-  .text-brand-gradient {
-    background: linear-gradient(
-      135deg,
-      var(--color-primary-light),
-      var(--color-primary),
-      var(--color-primary-dark),
-      var(--color-primary-deep)
-    );
-
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
   /* Section Background System */
 
   .section-cream {
@@ -238,23 +205,11 @@
   }
 
   .section-soft-purple {
-    background:
-      linear-gradient(
-        180deg,
-        rgba(172, 100, 247, 0.10),
-        rgba(172, 100, 247, 0.03)
-      ),
-      var(--color-bg);
+    background: var(--color-bg);
   }
 
   .section-highlight {
-    background:
-      linear-gradient(
-        135deg,
-        rgba(172, 100, 247, 0.12),
-        rgba(111, 53, 178, 0.04)
-      ),
-      var(--color-bg-secondary);
+    background: var(--color-bg-secondary);
   }
 
   /* Panels */
@@ -262,20 +217,16 @@
   .glass-panel {
     background: var(--color-panel);
     border: 1px solid var(--color-panel-border);
-    box-shadow: var(--shadow-panel);
   }
 
   .glass-card-landing {
     background: var(--color-panel);
     border: 1px solid var(--color-border);
-    transition: all 0.2s ease;
-    box-shadow: var(--shadow-soft);
+    transition: border-color 0.15s ease;
   }
 
   .glass-card-landing:hover {
     border-color: var(--color-primary-light);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(172, 100, 247, 0.12);
   }
 
   /* Navbar */
@@ -296,20 +247,15 @@
   /* Navigation */
 
   .nav-link-active {
-    background: rgba(172, 100, 247, 0.10);
-    border: 1px solid rgba(172, 100, 247, 0.20);
     color: var(--color-primary-dark);
   }
 
   .nav-link-idle {
-    border: 1px solid transparent;
     color: var(--color-text-secondary);
   }
 
   .nav-link-idle:hover {
     color: var(--color-primary-dark);
-    background: rgba(172, 100, 247, 0.05);
-    border-color: rgba(172, 100, 247, 0.10);
   }
 
   /* Buttons */
@@ -320,13 +266,16 @@
     color: #FFFFFF;
     font-family: var(--font-body);
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
   .btn-primary:hover {
     background: var(--color-primary-dark);
     border-color: var(--color-primary-dark);
-    box-shadow: 0 4px 16px rgba(172, 100, 247, 0.28);
+  }
+
+  .btn-primary:active {
+    opacity: 0.85;
   }
 
   .btn-ghost {
@@ -384,16 +333,7 @@
   }
 
   .gradient-text-purple {
-    background: linear-gradient(
-      10deg,
-      var(--color-primary-light),
-      var(--color-primary),
-      var(--color-primary-dark)
-    );
-
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--color-primary-dark);
   }
 
   .font-handwritten {
@@ -430,29 +370,11 @@
   }
 
   .dot-grid {
-    background-image:
-      radial-gradient(
-        circle,
-        rgba(172, 100, 247, 0.14) 1px,
-        transparent 1px
-      );
-
-    background-size: 22px 22px;
+    background: none;
   }
 
   .line-grid {
-    background-image:
-      linear-gradient(
-        rgba(172, 100, 247, 0.05) 1px,
-        transparent 1px
-      ),
-      linear-gradient(
-        90deg,
-        rgba(172, 100, 247, 0.05) 1px,
-        transparent 1px
-      );
-
-    background-size: 44px 44px;
+    background: none;
   }
 
   .score-bar {

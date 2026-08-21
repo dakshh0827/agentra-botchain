@@ -24,7 +24,7 @@ import { getAgentMetrics } from '../controllers/analyticsController.js'
 import { getReviews, createReview } from '../controllers/reviewController.js'
 import { callAgent, discoverAgents, getCommsTarget, getMessages } from '../controllers/agentCommsController.js'
 import { issueLicenseKey } from '../services/licenseService.js'
-import { getRuntimeKey } from '../services/runtimeKeyService.js'
+import { getRuntimeSecrets } from '../services/runtimeSecretsService.js'
 import {
   chatWithAgent,
   getAgentConversation,
@@ -45,6 +45,7 @@ router.get('/', optionalAuth, getAgents)
 router.get('/search', searchAgents)
 router.get('/discover', authMiddleware, discoverAgents)
 router.get('/comms-target', authMiddleware, getCommsTarget)
+
 // ── CHAT (PROTECTED) ─────────────────────────
 // Any agent exposing POST /chat gets durable per-wallet history from these three; the
 // agent stays stateless and the thread survives its restarts.
@@ -110,12 +111,12 @@ router.post('/:id/license', authMiddleware, async (req, res, next) => {
   }
 })
 
-// Runtime LLM key fetch — license JWT itself is the credential, no wallet auth needed
-router.post('/:agentId/runtime-key', async (req, res, next) => {
+// Runtime secret-preset fetch — license JWT itself is the credential, no wallet auth needed
+router.post('/:agentId/runtime-secrets', async (req, res, next) => {
   try {
     const licenseToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!licenseToken) return res.status(401).json({ error: 'Missing license token' })
-    res.json(await getRuntimeKey(req.params.agentId, licenseToken))
+    res.json(await getRuntimeSecrets(req.params.agentId, licenseToken))
   } catch (err) {
     next(err)
   }

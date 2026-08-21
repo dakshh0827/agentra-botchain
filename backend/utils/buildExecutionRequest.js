@@ -88,8 +88,8 @@ export function buildExecutionRequest(endpoint, executionConfig, runtimePayload,
       form.append('task', task || '')
 
       for (const fieldDef of (executionConfig?.bodyFields || [])) {
-        if (!fieldDef.userProvided && fieldDef.type !== 'file') {
-          // skip — no static defaults supported for body fields currently
+        if (!fieldDef.userProvided && fieldDef.value !== undefined && fieldDef.type !== 'file') {
+          form.append(fieldDef.key, fieldDef.value)
         }
       }
 
@@ -111,8 +111,15 @@ export function buildExecutionRequest(endpoint, executionConfig, runtimePayload,
       Object.assign(requestHeaders, form.getHeaders())
       data = form
     } else if (contentType === 'x-www-form-urlencoded') {
+      const bodyDefaults = {}
+      for (const f of (executionConfig?.bodyFields || [])) {
+        if (!f.userProvided && f.value !== undefined) bodyDefaults[f.key] = f.value
+      }
       const params = new URLSearchParams()
       params.append('task', task || '')
+      for (const [k, v] of Object.entries(bodyDefaults)) {
+        params.append(k, String(v))
+      }
       for (const [k, v] of Object.entries(runtimeBody)) {
         if (v !== undefined && v !== '') {
           params.append(k, String(v))
@@ -121,10 +128,11 @@ export function buildExecutionRequest(endpoint, executionConfig, runtimePayload,
       requestHeaders['Content-Type'] = 'application/x-www-form-urlencoded'
       data = params.toString()
     } else {
-      data = {
-        task: task || '',
-        ...runtimeBody,
+      const bodyDefaults = {}
+      for (const f of (executionConfig?.bodyFields || [])) {
+        if (!f.userProvided && f.value !== undefined) bodyDefaults[f.key] = f.value
       }
+      data = { task: task || '', ...bodyDefaults, ...runtimeBody }
       requestHeaders['Content-Type'] = 'application/json'
       requestHeaders['Accept'] = 'application/json, text/event-stream'
     }

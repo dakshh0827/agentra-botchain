@@ -1,6 +1,6 @@
 {
   "name": "@agentra-dev/cli",
-  "version": "1.0.12",
+  "version": "1.0.20",
   "description": "Agentra developer CLI",
   "type": "module",
   "bin": {
@@ -10,6 +10,6 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@agentra-dev/sdk": "^1.0.6"
+    "@agentra-dev/sdk": "^1.0.11"
   }
 }

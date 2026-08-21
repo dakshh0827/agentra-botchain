@@ -59,13 +59,17 @@ export class AgentraClient {
     this.userAgent = options.userAgent || 'agentra-sdk/1.0.0'
   }
 
+  normalizeWalletAddress(walletAddress) {
+    return walletAddress ? String(walletAddress).trim().toLowerCase() : null
+  }
+
   setBaseUrl(baseUrl) {
     this.baseUrl = String(baseUrl || '').replace(/\/$/, '')
     return this
   }
 
   setWalletAddress(walletAddress) {
-    this.walletAddress = walletAddress ? String(walletAddress).toLowerCase() : null
+    this.walletAddress = this.normalizeWalletAddress(walletAddress)
     return this
   }
 
@@ -88,12 +92,14 @@ export class AgentraClient {
     headers.set('user-agent', this.userAgent)
 
     if (auth) {
-      if (!this.walletAddress) {
+      const walletHeader = this.normalizeWalletAddress(headers.get('x-wallet-address'))
+      const resolvedWalletAddress = walletHeader || this.normalizeWalletAddress(this.walletAddress)
+      if (!resolvedWalletAddress) {
         throw new AgentraError('walletAddress is required for authenticated requests', {
           code: 'AGENTRA_AUTH_REQUIRED',
         })
       }
-      headers.set('x-wallet-address', this.walletAddress)
+      headers.set('x-wallet-address', resolvedWalletAddress)
     }
 
     let body = options.body
@@ -128,7 +134,11 @@ export class AgentraClient {
       const parsed = await parseResponseBody(response)
 
       if (!response.ok) {
-        throw new AgentraRequestError(`Request failed with status ${response.status}`, {
+        const serverError = parsed && typeof parsed === 'object' ? parsed.error || parsed.message : null
+        const errorMessage = serverError
+          ? `Request failed with status ${response.status}: ${serverError}`
+          : `Request failed with status ${response.status}`
+        throw new AgentraRequestError(errorMessage, {
           status: response.status,
           response: parsed,
           details: { url, method },
@@ -306,8 +316,10 @@ export class AgentraClient {
     })
   }
 
-  async getLicenseKey(agentId) {
-    return this.request(`/api/agents/${agentId}/license`, { method: 'POST' })
+  async getLicenseKey(agentId, options = {}) {
+    const walletAddress = this.normalizeWalletAddress(options.walletAddress || options.address)
+    const headers = walletAddress ? { 'x-wallet-address': walletAddress } : undefined
+    return this.request(`/api/agents/${agentId}/license`, { method: 'POST', headers })
   }
 
   async getAgentManifest(agentId) {

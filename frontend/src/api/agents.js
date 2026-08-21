@@ -62,9 +62,6 @@ deploy: (data) =>
       mcpSchema: data.mcpSchema || undefined,
       executionConfig: data.executionConfig || undefined,
       deployMode: data.deployMode || 'database',
-      llmApiKey: data.llmApiKey || undefined,
-      provider: data.provider,
-      providerBaseUrl: data.providerBaseUrl || undefined,
     }),
 
   confirmDeploy: (id, txHash, contractAgentId) =>
