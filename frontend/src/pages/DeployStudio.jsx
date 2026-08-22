@@ -369,6 +369,9 @@ export default function DeployStudio() {
           : '0',
         deployMode: form.deployMode,
         executionConfig: hasExecConfig ? form.executionConfig : undefined,
+        // NEW — used by backend to build DeployParams
+        avatarUrl: form.avatarUrl || undefined,
+        intelligence: { systemPrompt: form.description || '' },
       }
 
       // ── DATABASE ONLY ──
@@ -392,21 +395,25 @@ export default function DeployStudio() {
       const selectedTierConfig = selectedTier || TIER_OPTIONS[0]
       const deployFunctionName = DEPLOY_FUNCTION_BY_TIER[selectedTierConfig.tier] || DEPLOY_FUNCTION_BY_TIER.Standard
 
-      // Step 1: Create DB draft to get metadata URI
+      
+      // Step 1: Create DB draft — now also returns deployParams for the mint tx
       console.log('💾 Creating database draft...')
       const draftRes = await agentsAPI.deploy({ ...payload, deployMode: 'blockchain' })
       draftId = draftRes.data.id
-      const metadataURI = draftRes.data.metadataUri || `0g://pending-${draftId}`
-      console.log('✓ Draft created. Metadata URI:', metadataURI)
+      const deployParams = draftRes.data.deployParams
+      if (!deployParams) {
+        throw new Error('Backend did not return deploy parameters for the blockchain mint. Check server logs.')
+      }
+      console.log('✓ Draft created. Deploy params:', deployParams)
 
       // Step 2: Get listing fee requirement
       console.log('📋 Fetching listing fee requirement...')
       console.log('  Requesting wei equivalent of USD:', selectedTierConfig.listingFeeUSD)
-      
+
       // Convert decimal USD to integer (multiply by 100 to preserve cents as integers for BigInt)
       const listingFeeUSDAsInteger = Math.round(parseFloat(selectedTierConfig.listingFeeUSD) * 100)
       console.log('  Converted to integer cents:', listingFeeUSDAsInteger)
-      
+
       const requiredWei = await publicClient.readContract({
         address: Agentra.address,
         abi: Agentra.abi,
@@ -416,12 +423,12 @@ export default function DeployStudio() {
       if (!requiredWei) {
         throw new Error('Failed to get listing fee. Please check contract is deployed.')
       }
-      
+
       // Log raw value and type
       console.log('  Raw requiredWei returned:', requiredWei, 'Type:', typeof requiredWei)
       const requiredWeiBN = typeof requiredWei === 'bigint' ? requiredWei : BigInt(requiredWei)
       console.log('  Converted to BigInt:', requiredWeiBN.toString())
-      
+
       // Add 2% buffer
       const bufferPercent = requiredWeiBN / 50n // 2% = 1/50
       const bufferedFee = requiredWeiBN + bufferPercent
@@ -430,58 +437,55 @@ export default function DeployStudio() {
       console.log('  2% buffer (wei):', bufferPercent.toString())
       console.log('  Total fee to send (wei):', bufferedFee.toString())
 
-      // Step 3: Prepare pricing arguments
+      // Step 3: Build the DeployParams struct — this is the new shape the contract expects
       const monthlyPriceUSD = parseUnits(form.monthlyPrice || '0', 18)
       const commsPriceUSD = form.commsEnabled
         ? parseUnits(form.commsPricePerCall || '0', 18)
         : 0n
 
-      // Step 4: IMPORTANT - Trigger wallet approval
-      // This is where MetaMask modal opens
-      console.log('🔐 Opening MetaMask for transaction approval...')
-      console.log('📝 Transaction details:')
-      console.log('  Function:', deployFunctionName)
-      console.log('  Monthly Price (wei):', monthlyPriceUSD.toString())
-      console.log('  Metadata URI:', metadataURI)
-      console.log('  Comms Enabled:', !!form.commsEnabled)
-      console.log('  Comms Price (wei):', commsPriceUSD.toString())
-      console.log('  Listing Fee (USD):', selectedTierConfig.listingFeeUSD)
-      console.log('  Total Fee Value (wei):', bufferedFee.toString())
+      const deployParamsStruct = {
+        monthlyPriceUSD,
+        avatarURI: deployParams.avatarURI,
+        displayName: deployParams.displayName,
+        dataCommitment: deployParams.dataCommitment,
+        sealedKey: deployParams.sealedKey,
+        commsEnabled: !!form.commsEnabled,
+        commsPricePerCallUSD: commsPriceUSD,
+        listingFeeUSD: BigInt(listingFeeUSDAsInteger),
+      }
+
+      console.log('🔐 Opening wallet for transaction approval...')
+      console.log('📝 Deploy params struct:', deployParamsStruct)
 
       let deployTxHash = null
       try {
-        console.log('⏳ Waiting for user to confirm in MetaMask...')
+        console.log('⏳ Waiting for user to confirm in wallet...')
         const deployTxResult = await writeContractAsync({
           address: Agentra.address,
           abi: Agentra.abi,
           functionName: deployFunctionName,
-          args: [monthlyPriceUSD, metadataURI, !!form.commsEnabled, commsPriceUSD, BigInt(listingFeeUSDAsInteger)],
+          args: [deployParamsStruct],
           value: bufferedFee,
         })
-        
+
         deployTxHash = typeof deployTxResult === 'string'
           ? deployTxResult
           : deployTxResult?.hash
 
         if (!deployTxHash) {
-          throw new Error('MetaMask: Transaction was initiated but hash not returned. Please check MetaMask for details.')
+          throw new Error('Wallet: Transaction was initiated but hash not returned. Please check your wallet for details.')
         }
         console.log('✓ Transaction submitted to network:', deployTxHash)
       } catch (walletError) {
         const walletMsg = walletError?.shortMessage || walletError?.message || String(walletError)
-        console.error('❌ MetaMask/Wallet Error:', walletMsg)
-        
-        // User rejected or transaction failed at wallet level
+        console.error('❌ Wallet Error:', walletMsg)
         if (walletMsg.toLowerCase().includes('user rejected') || walletMsg.toLowerCase().includes('denied') || walletMsg.toLowerCase().includes('cancelled')) {
           throw new Error('You cancelled the transaction. Your draft has been saved and you can resume later.')
         }
-        
-        // Contract/validation errors from MetaMask simulation
         if (walletMsg.toLowerCase().includes('execution reverted') || walletMsg.toLowerCase().includes('reason:')) {
           throw new Error(`Contract validation failed: ${walletMsg}`)
         }
-        
-        throw new Error(`MetaMask error: ${walletMsg}`)
+        throw new Error(`Wallet error: ${walletMsg}`)
       }
 
       // Step 5: Wait for transaction to be mined

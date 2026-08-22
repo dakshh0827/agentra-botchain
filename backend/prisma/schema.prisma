@@ -110,12 +110,15 @@ model Agent {
 
   name            String        @unique
   description     String?
-  metadataUri     String?
-
+  
   ownerWallet     String
   owner           User          @relation(fields: [ownerWallet], references: [walletAddress])
 
   endpoint        String?
+
+  metadataUri        String?   // public display doc — unchanged meaning
+  intelligenceUri     String?  // NEW: 0g:// pointer to the ENCRYPTED intelligence blob
+
 
   tier            AgentTier
   pricing         String        // monthly price in wei

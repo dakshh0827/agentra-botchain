@@ -1,13 +1,19 @@
+// backend/controllers/agentController.js
 import agentService from '../services/agentService.js'
 import prisma from '../lib/prisma.js'
 import contractManager from '../lib/contractManager.js'
 import config from '../config/config.js'
-import { resolveAgentMetadata, uploadAgentMetadata } from '../services/storageService.js'
 import { getAgentAccessState, recordAgentPurchase } from '../services/accessService.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
 import { ethers } from 'ethers'
 import { z } from 'zod'
-import { encryptLlmKey as encryptSecretValue } from '../utils/cryptoKey.js'
+import { encryptLlmKey as encryptSecretValue, reSealDataKeyForTransfer } from '../utils/cryptoKey.js'
+import {
+  resolveAgentMetadata,
+  uploadAgentMetadata,
+  uploadEncryptedAgentIntelligence,
+  resolveEncryptedAgentIntelligence,
+} from '../services/storageService.js'
 
 const AGENTRA_CONFIRM_EVENT_ABI = [
   'event AgentDeployed(uint256 indexed agentId, address indexed creator, uint8 tier, uint256 listingFeePaidUSD)',
@@ -69,11 +75,11 @@ const executionConfigSchema = z.object({
 })
 
 const deploySchema = z.object({
-  name: z.string().min(2).max(64), 
+  name: z.string().min(2).max(64),
   description: z.string().min(10).max(1000).optional(),
   category: z.enum(['Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']),
   tags: z.array(z.string().max(32)).max(10).optional(),
-  pricing: z.string(),             // monthly price in wei
+  pricing: z.string(), // monthly price in wei
   lifetimeMultiplier: z.number().int().min(1).max(36).optional().default(12),
   commsEnabled: z.boolean().optional().default(false),
   commsPricePerCall: z.string().optional().default('0'),
@@ -83,6 +89,14 @@ const deploySchema = z.object({
   executionConfig: executionConfigSchema.optional(),
   deployMode: z.enum(['database', 'blockchain']).optional(),
   status: z.string().optional(),
+  // ERC-7857 fields
+  avatarUrl: z.string().url().optional(),       // public, shown in marketplace UI
+  intelligence: z.object({                       // the actual "brain" — gets encrypted
+    systemPrompt: z.string().optional(),
+    modelProvider: z.string().optional(),
+    modelConfig: z.record(z.string(), z.unknown()).optional(),
+    memorySeed: z.unknown().optional(),
+  }).optional(),
 })
 
 const updateSchema = z.object({
@@ -167,16 +181,15 @@ const getAgentManifest = asyncHandler(async (req, res) => {
 
   const manifest = await resolveAgentMetadata(agent.metadataUri)
 
-console.log('\n====== MANIFEST FETCH ======')
-console.log('Agent ID:', req.params.agentId)
-console.log(JSON.stringify(manifest, null, 2))
-console.log('============================\n')
+  console.log('\n====== MANIFEST FETCH ======')
+  console.log('Agent ID:', req.params.agentId)
+  console.log(JSON.stringify(manifest, null, 2))
+  console.log('============================\n')
 
-res.json(manifest)
+  res.json(manifest)
 })
 
 // ── DEPLOY AGENT (ON-CHAIN + DB) ───────────────────────────
-
 const deployAgent = asyncHandler(async (req, res) => {
   const data = deploySchema.parse(req.body)
   await ensureUniqueAgentName(data.name)
@@ -200,36 +213,49 @@ const deployAgent = asyncHandler(async (req, res) => {
   }
 
   console.log('\n========== DEPLOY ==========')
-console.log('Metadata Payload:')
-console.log(JSON.stringify(metadataPayload, null, 2))
-console.log('============================\n')
+  console.log('Metadata Payload:')
+  console.log(JSON.stringify(metadataPayload, null, 2))
+  console.log('============================\n')
 
   const { metadataUri: metadataURI } = await uploadAgentMetadata(metadataPayload)
+
   console.log('\n====== METADATA UPLOADED ======')
-console.log('Metadata URI:', metadataURI)
-console.log('===============================\n')
+  console.log('Metadata URI:', metadataURI)
+  console.log('===============================\n')
+
   const isBlockchain = data.deployMode === 'blockchain'
 
-  // For database-only deploys, skip the contract call
+  // NEW: encrypt + upload the agent's actual intelligence separately.
+  // Database-only deploys skip this — no on-chain commitment needed for them.
+  let sevenEightFiveSeven = null
+  if (isBlockchain) {
+    const intelligencePayload = data.intelligence || {
+      systemPrompt: data.description || '',
+      modelProvider: 'default',
+    }
+    sevenEightFiveSeven = await uploadEncryptedAgentIntelligence(intelligencePayload)
+  }
+
+  // ── DATABASE ONLY ──
   if (!isBlockchain) {
     const agent = await prisma.agent.create({
       data: {
-      name: data.name,
-      description: data.description,
-      metadataUri: metadataURI,
-      ownerWallet: req.walletAddress,
-      endpoint: data.endpoint,
-      tier: data.tier,
-      pricing: data.pricing,
-      lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
-      commsEnabled: data.commsEnabled ?? false,
-      commsPricePerCall: data.commsPricePerCall || '0',
-      category: data.category,
-      tags: data.tags || [],
-      mcpSchema: data.mcpSchema || null,
-      executionConfig: encryptedExecutionConfig || null,
-      status: 'active',
-      txHash: null,
+        name: data.name,
+        description: data.description,
+        metadataUri: metadataURI,
+        ownerWallet: req.walletAddress,
+        endpoint: data.endpoint,
+        tier: data.tier,
+        pricing: data.pricing,
+        lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
+        commsEnabled: data.commsEnabled ?? false,
+        commsPricePerCall: data.commsPricePerCall || '0',
+        category: data.category,
+        tags: data.tags || [],
+        mcpSchema: data.mcpSchema || null,
+        executionConfig: encryptedExecutionConfig || null,
+        status: 'active',
+        txHash: null,
       },
     })
 
@@ -244,42 +270,55 @@ console.log('===============================\n')
     return res.status(201).json(agent)
   }
 
-  // Blockchain deploys are draft-first: the frontend submits the wallet tx,
-  // then calls confirmDeploy once the transaction is mined.
+  // ── BLOCKCHAIN + DB ──
+  // Draft-first: the frontend submits the wallet tx, then calls confirmDeploy
+  // once the transaction is mined.
   const agent = await prisma.agent.create({
     data: {
-    name: data.name,
-    description: data.description,
-    metadataUri: metadataURI,
-    ownerWallet: req.walletAddress,
-    endpoint: data.endpoint,
-    tier: data.tier,
-    pricing: data.pricing,
-    lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
-    commsEnabled: data.commsEnabled ?? false,
-    commsPricePerCall: data.commsPricePerCall || '0',
-    category: data.category,
-    tags: data.tags || [],
-    mcpSchema: data.mcpSchema || null,
-    executionConfig: encryptedExecutionConfig || null,
-    status: 'draft',
-    txHash: null,
+      name: data.name,
+      description: data.description,
+      metadataUri: metadataURI,             // public display doc, unchanged meaning
+      intelligenceUri: sevenEightFiveSeven?.intelligenceUri || null,   // NEW field
+      ownerWallet: req.walletAddress,
+      endpoint: data.endpoint,
+      tier: data.tier,
+      pricing: data.pricing,
+      lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
+      commsEnabled: data.commsEnabled ?? false,
+      commsPricePerCall: data.commsPricePerCall || '0',
+      category: data.category,
+      tags: data.tags || [],
+      mcpSchema: data.mcpSchema || null,
+      executionConfig: encryptedExecutionConfig || null,
+      status: 'draft',
+      txHash: null,
     },
   })
 
   await prisma.usageMetrics.create({ data: { agentId: agent.id } })
-
   await prisma.globalStats.upsert({
     where: { id: 'global' },
     update: { totalAgents: { increment: 1 } },
     create: { id: 'global', totalAgents: 1, activeAgents: 0, totalCalls: 0, totalRevenue: '0' },
   })
 
-  res.status(201).json(agent)
+  // Return the deploy params the frontend needs for the wallet tx.
+  res.status(201).json({
+    ...agent,
+    deployParams: sevenEightFiveSeven ? {
+      monthlyPriceUSD: data.pricing,
+      avatarURI: data.avatarUrl || metadataURI,
+      displayName: data.name,
+      dataCommitment: sevenEightFiveSeven.dataCommitment,
+      sealedKey: sevenEightFiveSeven.sealedKey,
+      commsEnabled: data.commsEnabled ?? false,
+      commsPricePerCallUSD: data.commsPricePerCall || '0',
+      listingFeeUSD: '0', // set per your existing fee schedule
+    } : null,
+  })
 })
 
 // ── CONFIRM DEPLOY (SYNC CONTRACT ID) ──────────────────────────
-
 const confirmDeploy = asyncHandler(async (req, res) => {
   const { contractAgentId, txHash } = req.body
   const { id } = req.params
@@ -354,8 +393,6 @@ const confirmDeploy = asyncHandler(async (req, res) => {
     },
   })
 
-  // const listingFeeWei = '0'
-
   await prisma.transaction.upsert({
     where: { txHash },
     update: {
@@ -390,7 +427,6 @@ const confirmDeploy = asyncHandler(async (req, res) => {
 })
 
 // ── CANCEL DRAFT ───────────────────────────────────────────
-
 const cancelDraft = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -406,9 +442,6 @@ const cancelDraft = asyncHandler(async (req, res) => {
 })
 
 // ── PURCHASE ACCESS ────────────────────────────────────────────
-// For blockchain agents: txHash is provided after client-side wallet tx
-// For database agents: no txHash needed, access granted immediately
-
 const purchaseAccess = asyncHandler(async (req, res) => {
   const { agentId } = req.params
   const { isLifetime, txHash } = req.body
@@ -416,17 +449,14 @@ const purchaseAccess = asyncHandler(async (req, res) => {
   const agent = await prisma.agent.findFirst({ where: buildAgentLookup(agentId) })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
 
-  // Owner always has access
   if (agent.ownerWallet === req.walletAddress) {
     return res.status(400).json({ error: 'You own this agent' })
   }
 
-  // ✅ REQUIRED: escrow tx must exist
   if (!txHash) {
     return res.status(400).json({ error: 'txHash required: purchase must be processed by wallet first' })
   }
 
-  // ✅ Ensure tx is mined (not necessarily settled)
   const confirmed = await contractManager.isTransactionConfirmed(txHash)
   if (!confirmed) {
     return res.status(400).json({ error: 'Provided txHash is not confirmed on-chain' })
@@ -438,7 +468,6 @@ const purchaseAccess = asyncHandler(async (req, res) => {
     ? (monthlyWei * multiplier).toString()
     : monthlyWei.toString()
 
-  // Keep creator/platform split consistent with other monetized flows.
   const totalWei = BigInt(totalCost)
   const platformFeeWei = (totalWei * 20n / 100n).toString()
   const creatorAmountWei = (totalWei - BigInt(platformFeeWei)).toString()
@@ -447,7 +476,6 @@ const purchaseAccess = asyncHandler(async (req, res) => {
     ? new Date('9999-12-31')
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
-  // ✅ Grant access immediately (UX decision)
   await prisma.agentAccess.upsert({
     where: {
       agentId_userWallet: {
@@ -477,7 +505,6 @@ const purchaseAccess = asyncHandler(async (req, res) => {
     expiresAt,
   })
 
-  // Persist as confirmed once on-chain inclusion is verified by txHash.
   await prisma.transaction.upsert({
     where: { txHash },
     update: {
@@ -503,18 +530,12 @@ const purchaseAccess = asyncHandler(async (req, res) => {
     },
   })
 
-  // Keep denormalized revenue in sync with purchase persistence.
   await prisma.agent.update({
     where: { id: agent.id },
     data: {
       revenue: (BigInt(agent.revenue || '0') + BigInt(creatorAmountWei)).toString(),
     },
   })
-
-  // ❌ REMOVED:
-  // - platformFee calculation
-  // - creatorAmount calculation
-  // - revenue update
 
   res.json({
     success: true,
@@ -525,12 +546,9 @@ const purchaseAccess = asyncHandler(async (req, res) => {
 })
 
 // ── UPVOTE ─────────────────────────────────────────────────────
-// DB agents: free upvote, tracked by AgentUpvote table to prevent dupes
-// Blockchain agents: txHash required (wallet payment done client-side)
-
 const upvoteAgent = asyncHandler(async (req, res) => {
   const { agentId } = req.params
-  const { txHash } = req.body // optional now
+  const { txHash } = req.body
   const voterWallet = req.walletAddress
 
   const agent = await prisma.agent.findFirst({ where: buildAgentLookup(agentId) })
@@ -540,7 +558,6 @@ const upvoteAgent = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Cannot upvote your own agent' })
   }
 
-  // Check for duplicate upvote
   const existing = await prisma.agentUpvote.findUnique({
     where: { agentId_voterWallet: { agentId: agent.agentId, voterWallet } },
   })
@@ -549,7 +566,6 @@ const upvoteAgent = asyncHandler(async (req, res) => {
     return res.status(409).json({ error: 'Already upvoted this agent' })
   }
 
-  // Record upvote
   await prisma.agentUpvote.create({
     data: {
       agentId: agent.agentId,
@@ -558,13 +574,11 @@ const upvoteAgent = asyncHandler(async (req, res) => {
     },
   })
 
-  // Increment upvotes
   await prisma.agent.update({
     where: { id: agent.id },
     data: { upvotes: { increment: 1 } },
   })
 
-  // Transaction record (no payment)
   const txRecord = txHash || `upvote_${agent.agentId}_${Date.now()}`
 
   await prisma.transaction.upsert({
@@ -602,7 +616,6 @@ const checkUpvote = asyncHandler(async (req, res) => {
 })
 
 // ── CHECK ACCESS ──────────────────────────────────────────────
-
 const checkAccess = asyncHandler(async (req, res) => {
   const { agentId } = req.params
   const walletAddress = req.walletAddress
@@ -620,7 +633,6 @@ const checkAccess = asyncHandler(async (req, res) => {
 })
 
 // ── UPDATE / DELETE ───────────────────────────────────────────
-
 const updateAgent = asyncHandler(async (req, res) => {
   const data = updateSchema.parse(req.body)
   if (data.name) {
@@ -644,7 +656,6 @@ const deleteAgent = asyncHandler(async (req, res) => {
 })
 
 // ── OTHER ─────────────────────────────────────────────────────
-
 const validateEndpoint = asyncHandler(async (req, res) => {
   const { endpoint } = req.body
   if (!endpoint) return res.status(400).json({ error: 'endpoint required' })
@@ -657,6 +668,54 @@ const searchAgents = asyncHandler(async (req, res) => {
   if (!q) return res.status(400).json({ error: 'query param q required' })
   const agents = await agentService.searchAgents(q)
   res.json(agents)
+})
+
+// ── ERC-7857 TRANSFER FLOW ──────────────────────────────────
+// Prepares the sealedKey + proof the frontend needs to call contract.transfer()
+const prepareTransfer = asyncHandler(async (req, res) => {
+  const { agentId } = req.params
+  const { toAddress } = req.body
+
+  const agent = await prisma.agent.findFirst({ where: buildAgentLookup(agentId) })
+  if (!agent) return res.status(404).json({ error: 'Agent not found' })
+  if (agent.ownerWallet !== req.walletAddress) {
+    return res.status(403).json({ error: 'Only the current owner can initiate a transfer' })
+  }
+
+  const onChainData = await contractManager.getAgentData(agent.contractAgentId)
+  if (!onChainData) return res.status(400).json({ error: 'Agent has no on-chain intelligence data' })
+
+  const newSealedKey = reSealDataKeyForTransfer(onChainData.sealedKey)
+
+  // Sign the oracle proof — see TrustedOracleVerifier in the contract:
+  // keccak256("TRANSFER", tokenId, oldCommitment, newCommitment), personal_sign
+  const oracleWallet = new ethers.Wallet(config.blockchain.oracleSignerPrivateKey)
+  const messageHash = ethers.solidityPackedKeccak256(
+    ['string', 'uint256', 'bytes32', 'bytes32'],
+    ['TRANSFER', agent.contractAgentId, onChainData.dataCommitment, onChainData.dataCommitment]
+  )
+  const proof = await oracleWallet.signMessage(ethers.getBytes(messageHash))
+
+  res.json({ sealedKey: newSealedKey, proof, from: agent.ownerWallet, to: toAddress, tokenId: agent.contractAgentId })
+})
+
+// After the frontend submits contract.transfer(...) via wallet, confirm it same as confirmDeploy
+const confirmTransfer = asyncHandler(async (req, res) => {
+  const { agentId } = req.params
+  const { txHash, toAddress } = req.body
+
+  const confirmed = await contractManager.isTransactionConfirmed(txHash)
+  if (!confirmed) return res.status(400).json({ error: 'Provided txHash is not confirmed on-chain' })
+
+  const agent = await prisma.agent.findFirst({ where: buildAgentLookup(agentId) })
+  if (!agent) return res.status(404).json({ error: 'Agent not found' })
+
+  await prisma.agent.update({
+    where: { id: agent.id },
+    data: { ownerWallet: toAddress, txHash },
+  })
+
+  res.json({ success: true })
 })
 
 export {
@@ -674,4 +733,6 @@ export {
   deleteAgent,
   validateEndpoint,
   searchAgents,
+  prepareTransfer,
+  confirmTransfer,
 }
