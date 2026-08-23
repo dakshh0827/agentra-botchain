@@ -1,46 +1,53 @@
+// backend/blockchain/contracts.js
 import { ethers } from 'ethers'
 import config from '../config/config.js'
 
 // ─────────────────────────────────────────────
-// AGENTRA ABI (Updated)
+// AGENTRA ABI (ERC-7857 / V2)
 // ─────────────────────────────────────────────
-
 const AGENTRA_ABI = [
   // ─────────────────────────────────────────────
-  // DEPLOYMENT
+  // DEPLOYMENT — now takes a single DeployParams tuple instead of loose args
   // ─────────────────────────────────────────────
-
-  'function deployStandardAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
-  'function deployProfessionalAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
-  'function deployEnterpriseAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
+  'function deployStandardAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
+  'function deployProfessionalAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
+  'function deployEnterpriseAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
 
   // ─────────────────────────────────────────────
-  // ACCESS / PAYMENTS
+  // ACCESS / PAYMENTS — unchanged
   // ─────────────────────────────────────────────
-
   'function purchaseAccess(uint256 _agentId,uint8 _period) payable',
   'function initiateAgentComms(uint256 _callerAgentId,uint256 _targetAgentId) payable',
   'function getRequiredWei(uint256 _usdAmount) view returns (uint256)',
 
   // ─────────────────────────────────────────────
-  // AGENTS
+  // AGENTS — unchanged
   // ─────────────────────────────────────────────
-
   'function agents(uint256) view returns (uint8 tier,uint256 monthlyPriceUSD,bool commsEnabled,uint256 commsPricePerCallUSD)',
   'function updateAgentPricing(uint256 _agentId,uint256 _newMonthlyUSD,uint256 _newCommsUSD)',
   'function toggleAgentComms(uint256 _agentId,bool _enabled)',
+  'function updateAgentDisplay(uint256 _agentId,string _avatarURI,string _displayName)',
 
   // ─────────────────────────────────────────────
-  // ACCESS REGISTRY
+  // ERC-7857 CORE — new
   // ─────────────────────────────────────────────
+  'function agentData(uint256) view returns (bytes32 dataCommitment,bytes sealedKey)',
+  'function agentDisplay(uint256) view returns (string avatarURI,string displayName)',
+  'function transfer(address from,address to,uint256 tokenId,bytes sealedKey,bytes proof)',
+  'function clone(address to,uint256 tokenId,bytes sealedKey,bytes proof) returns (uint256 newTokenId)',
+  'function authorizeUsage(uint256 tokenId,address executor,bytes permissions)',
+  'function setVerifier(address _newVerifier)',
+  'function verifier() view returns (address)',
 
+  // ─────────────────────────────────────────────
+  // ACCESS REGISTRY — unchanged
+  // ─────────────────────────────────────────────
   'function accessRegistry(uint256,address) view returns (uint256)',
   'function localToGlobalId(uint256) view returns (uint256)',
 
   // ─────────────────────────────────────────────
-  // TRANSACTIONS
+  // TRANSACTIONS — unchanged
   // ─────────────────────────────────────────────
-
   'function pendingTransactions(uint256) view returns (uint256 id,address user,uint256 agentId,uint256 weiAmount,uint8 txType,uint8 period,uint8 status,uint256 timestamp)',
   'function txCounter() view returns (uint256)',
   'function resolveTransaction(uint256 _txId)',
@@ -48,27 +55,25 @@ const AGENTRA_ABI = [
   'function claimTimeoutRefund(uint256 _txId)',
 
   // ─────────────────────────────────────────────
-  // ORACLE / PRICING
+  // ORACLE / PRICING — unchanged
   // ─────────────────────────────────────────────
-
   'function update0GPrice(uint256 _newPriceUSD)',
   'function current0GPriceUSD() view returns (uint256)',
 
   // ─────────────────────────────────────────────
-  // ADMIN / PAUSABLE
+  // ADMIN / PAUSABLE — unchanged
   // ─────────────────────────────────────────────
-
   'function pause()',
   'function unpause()',
   'function paused() view returns (bool)',
 
   // ─────────────────────────────────────────────
-  // ROLES
+  // ROLES — unchanged
   // ─────────────────────────────────────────────
-
   'function DEFAULT_ADMIN_ROLE() view returns (bytes32)',
   'function ORACLE_ROLE() view returns (bytes32)',
   'function RESOLVER_ROLE() view returns (bytes32)',
+  'function VERIFIER_ADMIN_ROLE() view returns (bytes32)',
   'function hasRole(bytes32 role,address account) view returns (bool)',
   'function grantRole(bytes32 role,address account)',
   'function revokeRole(bytes32 role,address account)',
@@ -76,9 +81,10 @@ const AGENTRA_ABI = [
   'function getRoleAdmin(bytes32 role) view returns (bytes32)',
 
   // ─────────────────────────────────────────────
-  // ERC721
+  // ERC721 CORE — transferFrom/safeTransferFrom kept in ABI so ethers
+  // can still decode them if something calls them, but the contract
+  // itself reverts on these now (see Agentra.sol)
   // ─────────────────────────────────────────────
-
   'function balanceOf(address owner) view returns (uint256)',
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function approve(address to,uint256 tokenId)',
@@ -92,17 +98,15 @@ const AGENTRA_ABI = [
   'function supportsInterface(bytes4 interfaceId) view returns (bool)',
 
   // ─────────────────────────────────────────────
-  // METADATA
+  // METADATA — unchanged
   // ─────────────────────────────────────────────
-
   'function name() view returns (string)',
   'function symbol() view returns (string)',
   'function VERSION() view returns (uint256)',
 
   // ─────────────────────────────────────────────
-  // CONFIG
+  // CONFIG — unchanged
   // ─────────────────────────────────────────────
-
   'function feeCollector() view returns (address)',
   'function registry() view returns (address)',
   'function PLATFORM_FEE_PERCENTAGE() view returns (uint256)',
@@ -111,37 +115,32 @@ const AGENTRA_ABI = [
   // ─────────────────────────────────────────────
   // EVENTS
   // ─────────────────────────────────────────────
-
   'event AgentAccessGranted(uint256 indexed agentId,address indexed user,uint256 expiry)',
   'event AgentCommsPriceUpdated(uint256 indexed agentId,uint256 newPrice)',
   'event AgentCommsToggled(uint256 indexed agentId,bool enabled)',
   'event AgentDeployed(uint256 indexed agentId,address indexed creator,uint8 tier,uint256 listingFeePaidUSD)',
-
   'event TxPending(uint256 indexed txId,address indexed user,uint256 indexed agentId,uint8 txType,uint256 weiAmount)',
   'event TxResolved(uint256 indexed txId,address indexed user,uint256 indexed agentId)',
   'event TxRefunded(uint256 indexed txId,address indexed user,uint256 indexed agentId)',
-
   'event Approval(address indexed owner,address indexed approved,uint256 indexed tokenId)',
   'event ApprovalForAll(address indexed owner,address indexed operator,bool approved)',
   'event Transfer(address indexed from,address indexed to,uint256 indexed tokenId)',
-
   'event Paused(address account)',
   'event Unpaused(address account)',
-
   'event PriceUpdated(uint256 new0GPriceUSD)',
-
   'event RoleAdminChanged(bytes32 indexed role,bytes32 indexed previousAdminRole,bytes32 indexed newAdminRole)',
   'event RoleGranted(bytes32 indexed role,address indexed account,address indexed sender)',
   'event RoleRevoked(bytes32 indexed role,address indexed account,address indexed sender)',
-
-  'event MetadataUpdate(uint256 _tokenId)',
-  'event BatchMetadataUpdate(uint256 _fromTokenId,uint256 _toTokenId)',
+  // ERC-7857 events — new
+  'event DataTransferred(uint256 indexed tokenId,address indexed from,address indexed to,bytes32 newDataCommitment)',
+  'event Cloned(uint256 indexed sourceTokenId,uint256 indexed newTokenId,address indexed to,bytes32 newDataCommitment)',
+  'event UsageAuthorized(uint256 indexed tokenId,address indexed executor,bytes permissions)',
+  'event VerifierUpdated(address indexed oldVerifier,address indexed newVerifier)',
 ]
 
 // ─────────────────────────────────────────────
 // CONTRACT MANAGER
 // ─────────────────────────────────────────────
-
 class ContractManager {
   constructor() {
     this.provider = null
@@ -172,7 +171,6 @@ class ContractManager {
       console.log('[CONTRACTS] Creating JSON RPC Provider:', config.blockchain.rpcUrl)
       this.provider = new ethers.JsonRpcProvider(config.blockchain.rpcUrl)
 
-      // Test provider connection
       console.log('[CONTRACTS] Testing provider connection...')
       const network = await this.provider.getNetwork()
       console.log('[CONTRACTS] ✅ Connected to network:', {
@@ -223,14 +221,12 @@ class ContractManager {
   }
 
   // ─────────────────────────────────────────────
-  // NETWORK INFO
+  // NETWORK INFO — unchanged
   // ─────────────────────────────────────────────
-
   async getNetworkInfo() {
     if (this._mockMode || !this.provider) {
       return { mock: true, rpcUrl: config.blockchain.rpcUrl || 'none' }
     }
-
     try {
       const network = await this.provider.getNetwork()
       return {
@@ -244,88 +240,89 @@ class ContractManager {
   }
 
   // ─────────────────────────────────────────────
-  // DEPLOY AGENT (Native Payment)
+  // DEPLOY AGENT — now takes a params object matching DeployParams struct
   // ─────────────────────────────────────────────
-
-  async deployAgent(
-    tier,
-    monthlyPriceUSD,
-    metadataURI,
-    commsEnabled = false,
-    commsPricePerCallUSD = 0n,
-    listingFeeUSD = 0n
-  ) {
+  async deployAgent(tier, params) {
+    // params: { monthlyPriceUSD, avatarURI, displayName, dataCommitment, sealedKey, commsEnabled, commsPricePerCallUSD, listingFeeUSD }
     if (this._mockMode) {
       return { success: true, txHash: `0xmock_deploy_${Date.now()}` }
     }
-
     try {
-      // compute required wei for listingFeeUSD supplied by caller
-      const requiredWei = listingFeeUSD > 0n ? await this.agentra.getRequiredWei(listingFeeUSD) : 0n
-
-      // 2% buffer for slippage
+      const requiredWei = params.listingFeeUSD > 0n
+        ? await this.agentra.getRequiredWei(params.listingFeeUSD)
+        : 0n
       const buffered = requiredWei ? (requiredWei + (requiredWei * 2n) / 100n) : 0n
 
       const tierIndex = Number(tier)
       let tx
+
       if (tierIndex === 0) {
-        tx = await this.agentra.deployStandardAgent(monthlyPriceUSD, metadataURI, commsEnabled, commsPricePerCallUSD, listingFeeUSD, { value: buffered })
+        tx = await this.agentra.deployStandardAgent(params, { value: buffered })
       } else if (tierIndex === 1) {
-        tx = await this.agentra.deployProfessionalAgent(monthlyPriceUSD, metadataURI, commsEnabled, commsPricePerCallUSD, listingFeeUSD, { value: buffered })
+        tx = await this.agentra.deployProfessionalAgent(params, { value: buffered })
       } else {
-        tx = await this.agentra.deployEnterpriseAgent(monthlyPriceUSD, metadataURI, commsEnabled, commsPricePerCallUSD, listingFeeUSD, { value: buffered })
+        tx = await this.agentra.deployEnterpriseAgent(params, { value: buffered })
       }
 
       const receipt = await tx.wait(1)
-
-      return {
-        success: true,
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber
-      }
+      return { success: true, txHash: receipt.hash, blockNumber: receipt.blockNumber }
     } catch (err) {
       return { success: false, error: err.message }
     }
   }
 
   // ─────────────────────────────────────────────
-  // PURCHASE ACCESS (Native Payment)
+  // ERC-7857 TRANSFER / CLONE / AUTHORIZE — new
+  // These are typically submitted by the FRONTEND via the user's own
+  // wallet (same pattern as your existing purchaseAccess flow), so this
+  // manager-level method exists mainly for backend-relayed cases (e.g. a
+  // "gasless transfer" feature) — most calls will go straight from the
+  // frontend using sealedKey/proof values this backend computed for it.
   // ─────────────────────────────────────────────
-
-  async purchaseAccess(agentId, period, monthlyPriceUSD) {
+  async transferAgent(from, to, tokenId, sealedKey, proof) {
     if (this._mockMode) {
-      return { success: true, txHash: `0xmock_purchase_${Date.now()}` }
+      return { success: true, txHash: `0xmock_transfer_${Date.now()}` }
     }
-
+    if (!this.signer) throw new Error('Signer required to relay transfer')
     try {
-      const multiplier = period === 1 ? 12n : 1n
-      const totalUSD = BigInt(monthlyPriceUSD) * multiplier
-
-      const requiredWei = totalUSD > 0n ? await this.agentra.getRequiredWei(totalUSD) : 0n
-
-      // 2% buffer
-      const buffered = requiredWei ? (requiredWei + (requiredWei * 2n) / 100n) : 0n
-
-      const tx = await this.agentra.purchaseAccess(agentId, period, { value: buffered })
-
+      const tx = await this.agentra.transfer(from, to, tokenId, sealedKey, proof)
       const receipt = await tx.wait(1)
-
-      return {
-        success: true,
-        txHash: receipt.hash
-      }
+      return { success: true, txHash: receipt.hash }
     } catch (err) {
       return { success: false, error: err.message }
     }
   }
 
-  // ─────────────────────────────────────────────
-  // READ FUNCTIONS
-  // ─────────────────────────────────────────────
+  async cloneAgent(to, tokenId, sealedKey, proof) {
+    if (this._mockMode) {
+      return { success: true, txHash: `0xmock_clone_${Date.now()}` }
+    }
+    if (!this.signer) throw new Error('Signer required to relay clone')
+    try {
+      const tx = await this.agentra.clone(to, tokenId, sealedKey, proof)
+      const receipt = await tx.wait(1)
+      return { success: true, txHash: receipt.hash }
+    } catch (err) {
+      return { success: false, error: err.message }
+    }
+  }
 
+  async getAgentData(tokenId) {
+    if (this._mockMode) return null
+    try {
+      const d = await this.agentra.agentData(tokenId)
+      return { dataCommitment: d.dataCommitment, sealedKey: d.sealedKey }
+    } catch (err) {
+      console.error('[CONTRACTS] getAgentData error:', err.message)
+      return null
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // READ FUNCTIONS — unchanged
+  // ─────────────────────────────────────────────
   async getAgent(agentId) {
     if (this._mockMode) return null
-
     try {
       const a = await this.agentra.agents(agentId)
       return {
@@ -342,12 +339,10 @@ class ContractManager {
   }
 
   async hasAccess(agentId, user) {
-    // In mock mode do NOT grant access by default — safer for production deployments.
     if (this._mockMode) {
       console.log('[CONTRACTS] hasAccess() - Mock mode active, denying access', { agentId, user })
       return false
     }
-
     try {
       console.log('[CONTRACTS] hasAccess() - Checking on-chain access', { agentId, user })
       const exp = await this.agentra.accessRegistry(agentId, user)
@@ -359,11 +354,7 @@ class ContractManager {
       const isLifetime = expNum === Number.MAX_SAFE_INTEGER
       const hasNotExpired = expNum > Math.floor(Date.now() / 1000)
       console.log('[CONTRACTS] hasAccess() - Access found:', {
-        agentId,
-        user,
-        isLifetime,
-        expiresAt: new Date(expNum * 1000),
-        hasNotExpired
+        agentId, user, isLifetime, expiresAt: new Date(expNum * 1000), hasNotExpired
       })
       if (isLifetime) return true
       return hasNotExpired
@@ -377,7 +368,6 @@ class ContractManager {
     if (!txHash || typeof txHash !== 'string') return false
     if (this._mockMode) return true
     if (!this.provider) return false
-
     try {
       const receipt = await this.provider.getTransactionReceipt(txHash)
       return !!(receipt && receipt.status === 1)
@@ -390,112 +380,28 @@ class ContractManager {
     if (!txHash || typeof txHash !== 'string') return false
     if (this._mockMode) return true
     if (!this.provider) return false
-
     const startedAt = Date.now()
     while (Date.now() - startedAt < timeoutMs) {
       const confirmed = await this.isTransactionConfirmed(txHash)
       if (confirmed) return true
-
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     }
-
     return false
   }
 
-  // ─────────────────────────────────────────────
-  // EVENTS
-  // ─────────────────────────────────────────────
-
   onAgentDeployed(callback) {
-    // if (this._mockMode) return () => {}
-
-    // const handler = (agentId, creator, tier, event) => {
-    //   callback({
-    //     agentId: Number(agentId),
-    //     creator,
-    //     tier: Number(tier),
-    //     txHash: event.log.transactionHash
-    //   })
-    // }
-
-    // this.agentra.on('AgentDeployed', handler)
-    // return () => this.agentra.off('AgentDeployed', handler)
-    
     return () => {}
   }
 
   onAccessPurchased(callback) {
-    // if (this._mockMode) return () => {}
-
-    // const handler = (agentId, buyer, isLifetime, event) => {
-    //   callback({
-    //     agentId: Number(agentId),
-    //     buyer,
-    //     isLifetime,
-    //     txHash: event.log.transactionHash
-    //   })
-    // }
-
-    // this.agentra.on('AccessPurchased', handler)
-    // return () => this.agentra.off('AccessPurchased', handler)
-
     return () => {}
   }
-
-  // ─────────────────────────────────────────────
-  // LISTENERS (DB SYNC)
-  // ─────────────────────────────────────────────
 
   startAllListeners(prisma) {
     if (this._mockMode) {
       console.log('[CONTRACTS] Mock mode — no listeners')
       return
     }
-
-    // Agent deployed
-    // this.onAgentDeployed(async (event) => {
-    //   try {
-    //     await prisma.agent.updateMany({
-    //       where: { contractAgentId: event.agentId },
-    //       data: { status: 'active' }
-    //     })
-    //   } catch (err) {
-    //     console.error('[EVENT] AgentDeployed DB error:', err.message)
-    //   }
-    // })
-
-    // // Access purchased
-    // this.onAccessPurchased(async (event) => {
-    //   try {
-    //     await prisma.agentAccess.upsert({
-    //       where: {
-    //         agentId_userWallet: {
-    //           agentId: String(event.agentId),
-    //           userWallet: event.buyer
-    //         }
-    //       },
-    //       update: {
-    //         isLifetime: event.isLifetime,
-    //         expiresAt: event.isLifetime
-    //           ? new Date('9999-12-31')
-    //           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    //       },
-    //       create: {
-    //         agentId: String(event.agentId),
-    //         userWallet: event.buyer,
-    //         isLifetime: event.isLifetime,
-    //         expiresAt: event.isLifetime
-    //           ? new Date('9999-12-31')
-    //           : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    //       }
-    //     })
-    //   } catch (err) {
-    //     console.error('[EVENT] AccessPurchased DB error:', err.message)
-    //   }
-    // })
-
-    // console.log('[CONTRACTS] ✅ Event listeners running')
-
     console.log('[CONTRACTS] ⚠️ Event listeners skipped (0G RPC lacks filter support). Polling active via resolverJob.')
   }
 
@@ -504,11 +410,9 @@ class ContractManager {
       console.log('[CONTRACTS] Mock mode — skipping update0GPrice')
       return { hash: `0xmock_oracle_${Date.now()}` }
     }
-
     if (!this.signer) {
       throw new Error('Signer required for update0GPrice — set PRIVATE_KEY with ORACLE_ROLE')
     }
-
     return await this.agentra.update0GPrice(priceWei)
   }
 
@@ -551,14 +455,8 @@ class ContractManager {
     try {
       const pTx = await this.agentra.pendingTransactions(txId)
       return {
-        id: pTx[0],
-        user: pTx[1],
-        agentId: pTx[2],
-        weiAmount: pTx[3],
-        txType: pTx[4],
-        period: pTx[5],
-        status: pTx[6],
-        timestamp: pTx[7],
+        id: pTx[0], user: pTx[1], agentId: pTx[2], weiAmount: pTx[3],
+        txType: pTx[4], period: pTx[5], status: pTx[6], timestamp: pTx[7],
       }
     } catch (err) {
       console.error(`[CONTRACTS] getPendingTransaction(${txId}) error:`, err.message)

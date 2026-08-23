@@ -64,6 +64,10 @@ function wantsFreshRun(text, report) {
   return hosts.length === 1 && compact.length <= hosts[0].length + 12
 }
 
+// One flat chip style for every deliverable. The per-format colours these replaced
+// competed with the agent's own content for attention.
+const deliverableTone = 'text-[var(--color-text-secondary)] bg-[var(--color-bg)] border-[var(--color-border)]'
+
 const TABS = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'history', label: 'History', icon: History },
@@ -87,13 +91,12 @@ function FeatureGrid({ caps }) {
             <div
               key={title}
               className={`group relative overflow-hidden flex items-start gap-3.5 rounded-2xl border
-                          px-3.5 py-3.5 shadow-sm transition-all duration-200
-                          hover:-translate-y-0.5 hover:shadow-md
+                          px-3.5 py-3.5 transition-colors duration-150
                           ${tone || 'border-[var(--color-border)] bg-[var(--color-bg)]'}`}
             >
               <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-md
-                            ${iconWrap || `${wrap || 'bg-slate-700'} text-white`}`}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0
+                            ${iconWrap || `${wrap || 'bg-primary'} text-white`}`}
               >
                 <Icon size={18} strokeWidth={2.25} />
               </div>
@@ -119,11 +122,11 @@ function FeatureGrid({ caps }) {
             Downloadable after a successful run that produces them.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {deliverables.map(({ key, label, Icon, tone }) => (
+            {deliverables.map(({ key, label, Icon }) => (
               <span
                 key={key}
                 className={`inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3
-                            rounded-xl border text-xs font-bold shadow-sm ${tone}`}
+                            rounded-xl border text-xs font-bold ${deliverableTone}`}
               >
                 <Icon size={18} strokeWidth={2.2} />
                 {label}
@@ -569,24 +572,21 @@ export default function TryAgentModal({ agent, open, onClose }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="try-agent-title"
-            initial={{ opacity: 0, y: 28, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
             className="relative w-full max-w-6xl h-[min(94vh,900px)] flex flex-col rounded-3xl
-                       border border-[rgba(172,100,247,0.32)]
+                       border border-[var(--color-border)]
                        bg-[var(--color-panel)]
-                       shadow-[0_32px_90px_rgba(111,53,178,0.28),0_0_0_1px_rgba(172,100,247,0.12)]
                        overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Premium header band */}
+            {/* Header band */}
             <div className="shrink-0 relative overflow-hidden border-b border-[var(--color-border)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#AC64F7]/12 via-transparent to-[#6F35B2]/08 pointer-events-none" />
               <div className="relative px-5 sm:px-7 pt-5 pb-0">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="rounded-2xl overflow-hidden shrink-0 ring-2 ring-[rgba(172,100,247,0.35)]
-                                  shadow-[0_4px_16px_rgba(111,53,178,0.3)]">
+                  <div className="rounded-2xl overflow-hidden shrink-0 border border-[var(--color-border)]">
                     <AgentAvatar agent={agent} size={52} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -613,10 +613,10 @@ export default function TryAgentModal({ agent, open, onClose }) {
                     </p>
                     {caps.deliverables.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
-                        {caps.deliverables.map(({ key, label, Icon, tone }) => (
+                        {caps.deliverables.map(({ key, label, Icon }) => (
                           <span
                             key={key}
-                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${tone}`}
+                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${deliverableTone}`}
                           >
                             <Icon size={12} />
                             {label}
@@ -691,8 +691,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                 <div className="px-5 sm:px-7 py-5 space-y-3 min-h-full">
                   {!isConnected ? (
                     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)]
-                                    p-6 sm:p-8 text-center max-w-lg mx-auto my-6 shadow-sm">
-                      <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center mb-4">
+                                    p-6 sm:p-8 text-center max-w-lg mx-auto my-6">
+                      <div className="mx-auto w-12 h-12 rounded-2xl bg-primary text-white flex items-center justify-center mb-4">
                         <Lock size={20} />
                       </div>
                       <h3 className="text-base font-bold text-[var(--color-text-primary)]">
@@ -706,9 +706,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                         <button
                           type="button"
                           onClick={() => openWallet()}
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                     bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
-                                     hover:brightness-110 transition-all cursor-pointer"
+                          className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                     transition-colors cursor-pointer"
                         >
                           <Wallet size={14} /> Connect wallet
                         </button>
@@ -800,8 +799,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white cursor-pointer"
+                        className="btn-primary inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
                       >
                         <Wallet size={14} /> Connect wallet
                       </button>
@@ -828,16 +826,16 @@ export default function TryAgentModal({ agent, open, onClose }) {
               {tab === 'features' && (
                 <div className="px-5 sm:px-7 py-6 space-y-4">
                   {!isConnected && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3
+                    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3.5 py-3
                                     flex flex-col sm:flex-row sm:items-center gap-3">
-                      <p className="text-xs text-amber-900/80 leading-relaxed flex-1">
+                      <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed flex-1">
                         Preview mode — explore what this agent does. Connect to run it or purchase access.
                       </p>
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
-                                   text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
+                        className="btn-primary shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                                   text-[11px] font-bold transition-colors cursor-pointer"
                       >
                         <Wallet size={12} /> Connect
                       </button>
@@ -851,8 +849,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
             {/* Composer / gate CTA */}
             <div className="shrink-0 px-4 sm:px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-panel)]">
               {!isConnected ? (
-                <div className="rounded-2xl border border-[rgba(172,100,247,0.28)]
-                                bg-gradient-to-br from-[rgba(172,100,247,0.10)] to-[rgba(111,53,178,0.06)]
+                <div className="rounded-2xl border border-[var(--color-border)]
+                                bg-[var(--color-bg-secondary)]
                                 p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="min-w-0 flex-1">
@@ -867,9 +865,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
-                                   hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.35)]"
+                        className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                   transition-colors cursor-pointer"
                       >
                         <Wallet size={14} /> Connect wallet
                       </button>
@@ -943,9 +940,9 @@ export default function TryAgentModal({ agent, open, onClose }) {
                   type="button"
                   onClick={() => run()}
                   disabled={busy || !task.trim()}
-                  className="shrink-0 w-11 h-11 rounded-full bg-gradient-to-br from-[#AC64F7] to-[#6F35B2]
-                             text-white flex items-center justify-center disabled:opacity-40
-                             hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.45)]"
+                  className="btn-primary shrink-0 w-11 h-11 rounded-full
+                             flex items-center justify-center disabled:opacity-40
+                             transition-colors cursor-pointer"
                   aria-label="Run"
                 >
                   {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}

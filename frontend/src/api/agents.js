@@ -62,7 +62,18 @@ deploy: (data) =>
       mcpSchema: data.mcpSchema || undefined,
       executionConfig: data.executionConfig || undefined,
       deployMode: data.deployMode || 'database',
+      avatarUrl: data.avatarUrl || undefined,       // NEW
+      intelligence: data.intelligence || undefined,  // NEW
     }),
+
+    // NEW — for the transfer/prepare + transfer/confirm backend routes we built.
+// No page in your repo calls these yet (I haven't seen a transfer UI in
+// AgentDetail.jsx), so these are ready for whenever you add that feature:
+prepareTransfer: (agentId, toAddress) =>
+  api.post(`/agents/${agentId}/transfer/prepare`, { toAddress }),
+
+confirmTransfer: (agentId, txHash, toAddress) =>
+  api.post(`/agents/${agentId}/transfer/confirm`, { txHash, toAddress }),
 
   confirmDeploy: (id, txHash, contractAgentId) =>
     api.post(`/agents/${id}/confirm`, {

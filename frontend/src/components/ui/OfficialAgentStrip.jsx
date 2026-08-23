@@ -80,7 +80,6 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, duration: 0.3 }}
-      whileHover={{ y: -4 }}
       onClick={(e) => {
         if (isConnected) return
         if (e.target.closest('a, button')) return
@@ -89,7 +88,7 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
       className={`${agentCardShellClass} ${!isConnected ? 'cursor-pointer' : ''}`}
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c9a8f0] to-transparent opacity-80" />
-      <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.06] rounded-bl-full -z-10 group-hover:bg-primary/10 transition-colors" />
+      <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.06] rounded-bl-full pointer-events-none group-hover:bg-primary/10 transition-colors" />
 
       <div className="flex justify-between items-start mb-3 gap-2">
         <div className="flex items-start gap-2.5 min-w-0">
@@ -170,15 +169,15 @@ export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
               isHero ? 'text-2xl md:text-3xl' : 'text-base',
             ].join(' ')}
           >
-            {!isHero && (
+            {/* {!isHero && (
               <span className="w-5 h-5 rounded-md bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] inline-flex items-center justify-center">
                 <BadgeCheck size={12} className="text-white" />
               </span>
-            )}
+            )} */}
             {isHero ? 'Agents we built and run' : 'Built by Agentra'}
           </h2>
           <p className={['text-text-muted mt-1', isHero ? 'text-sm' : 'text-xs'].join(' ')}>
-            First-party agents — same card layout and rails as the rest of the marketplace.
+            First-party agents - built by ourselves.
           </p>
         </div>
         {!isHero && (
