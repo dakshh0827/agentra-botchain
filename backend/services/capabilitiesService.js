@@ -5,7 +5,9 @@ import { capabilitiesFingerprint, inferCapabilities } from '../utils/inferCapabi
 import { assertSafeUrl } from '../utils/ssrfGuard.js'
 
 
-const PROBE_TIMEOUT_MS = 5000
+const PROBE_TIMEOUT_MS = 20_000
+const PROBE_ATTEMPTS = 2
+const PROBE_RETRY_MS = 2_000
 const MAX_PROBE_BYTES = 32 * 1024
 
 
@@ -22,18 +24,27 @@ export async function probeCapabilities(endpoint) {
     return null
   }
 
-  try {
-    const res = await axios.get(url, {
-      timeout: PROBE_TIMEOUT_MS,
-      maxRedirects: 0,
-      maxContentLength: MAX_PROBE_BYTES,
-      headers: { Accept: 'application/json' },
-      validateStatus: (s) => s === 200,
-    })
-    return parseCapabilities(res.data)
-  } catch {
-    return null
+  // A sleeping instance answers the first request slowly or with a platform 502, so
+  // one miss is not evidence the agent has nothing to declare.
+  for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt++) {
+    try {
+      const res = await axios.get(url, {
+        timeout: PROBE_TIMEOUT_MS,
+        maxRedirects: 0,
+        maxContentLength: MAX_PROBE_BYTES,
+        headers: { Accept: 'application/json' },
+        validateStatus: (s) => s === 200,
+      })
+      return parseCapabilities(res.data)
+    } catch (err) {
+      if (attempt === PROBE_ATTEMPTS) {
+        console.warn(`[CAPABILITIES] probe of ${url} gave up after ${attempt} attempt(s):`, err.message)
+        return null
+      }
+      await new Promise((resolve) => setTimeout(resolve, PROBE_RETRY_MS))
+    }
   }
+  return null
 }
 
 
