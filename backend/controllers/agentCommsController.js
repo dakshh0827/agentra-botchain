@@ -1,37 +1,14 @@
-import { z } from 'zod'
 import prisma from '../lib/prisma.js'
 import orchestrator from '../orchestrator/orchestrator.js'
-import { hasPersistentAgentAccess } from '../services/accessService.js'
+import { accessDeniedMessage, getAgentAccessState } from '../services/accessService.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
 import agentService from '../services/agentService.js'
 import { validateRuntimePayload } from '../utils/validateRuntimePayloadAgainstExecutionConfig.js'
-
-const callAgentSchema = z.object({
-  task: z.string().min(1).max(10000),
-  targetAgentName: z.string().min(2).max(64).optional(),
-  targetAgentId: z.union([z.string(), z.number()]).transform((v) => String(v)).optional(),
-  autoDiscover: z.boolean().optional().default(false),
-  txHash: z.string().min(10).optional(),
-  runtimePayload: z
-    .object({
-      headers: z.record(z.string(), z.string()).optional().default({}),
-      body: z.record(z.string(), z.unknown()).optional().default({}),
-      files: z.record(z.string(), z.unknown()).optional().default({}),
-      contentType: z.string().optional(),
-      method: z.string().optional(),
-    })
-    .optional(),
-})
-
-const discoverSchema = z.object({
-  task: z.string().min(2).max(300),
-  excludeId: z.string().optional(),
-})
-
-const commsTargetSchema = z.object({
-  targetAgentName: z.string().min(2).max(64).optional(),
-  targetAgentId: z.union([z.string(), z.number()]).transform((v) => String(v)).optional(),
-})
+import {
+  callAgentSchema,
+  discoverSchema,
+  commsTargetSchema,
+} from '../schemas/agentCommsSchema.js'
 
 function _isObjectId(value) {
   return /^[a-f\d]{24}$/i.test(value)
@@ -68,10 +45,6 @@ async function _resolveTargetAgent(targetAgentName, targetAgentId) {
   }
 
   return null
-}
-
-async function _checkAccessToSourceAgent(agent, callerWallet) {
-  return hasPersistentAgentAccess(agent, callerWallet)
 }
 
 async function _discoverTargetAgent(task, excludeAgentId) {
@@ -211,9 +184,12 @@ const callAgent = asyncHandler(async (req, res) => {
   const sourceAgent = await _resolveAgent(fromId)
   if (!sourceAgent) return res.status(404).json({ error: 'Source agent not found' })
 
-  const canUseSource = await _checkAccessToSourceAgent(sourceAgent, callerWallet)
-  if (!canUseSource) {
-    return res.status(403).json({ error: `Access not purchased for source agent ${sourceAgent.agentId}` })
+  const sourceAccess = await getAgentAccessState(sourceAgent, callerWallet)
+  if (!sourceAccess.hasAccess) {
+    return res.status(403).json({
+      error: `${accessDeniedMessage(sourceAccess)} (source agent ${sourceAgent.agentId})`,
+      freeRuns: sourceAccess.freeRuns || null,
+    })
   }
 
   let targetAgent = null

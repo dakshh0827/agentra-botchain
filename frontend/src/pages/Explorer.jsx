@@ -193,6 +193,12 @@ export default function Explorer() {
             <div className="flex-1 min-h-0 overflow-y-auto pr-1 mt-6 space-y-6">
             <OfficialAgentStrip variant="compact" limit={4} />
 
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-[10px] uppercase tracking-wide text-text-dim font-semibold shrink-0">Creator Agents</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
             {/* AGENT CARDS GRID */}
             {isLoading ? (
               <LoadingPulse />
@@ -203,7 +209,6 @@ export default function Explorer() {
                     {filteredAgents.map((agent, idx) => (
                       <motion.div
                         key={agent.id || agent.agentId || idx}
-                        whileHover={{ y: -4 }}
                         onClick={(e) => {
                           if (isConnected) return
                           if (e.target.closest('a, button')) return
@@ -212,7 +217,7 @@ export default function Explorer() {
                         className={`${agentCardShellClass} ${!isConnected ? 'cursor-pointer' : ''}`}
                       >
                           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c9a8f0] to-transparent opacity-70" />
-                          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.05] rounded-bl-full -z-10 group-hover:bg-primary/10 transition-colors" />
+                          <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.05] rounded-bl-full pointer-events-none group-hover:bg-primary/10 transition-colors" />
 
                           <div className="flex justify-between items-start mb-3 gap-2">
                             <div className="flex items-start gap-2.5 min-w-0">

@@ -150,6 +150,20 @@ function isSeoAuditPayload(obj) {
   )
 }
 
+// Unwraps the common `{ success, response: "..." }` / `{ message: "..." }` shape
+// so the actual answer flows through the same code/table/text detection as a
+// plain string, instead of being dumped as one opaque JSON field.
+const WRAPPER_KEYS = ['response', 'message', 'output', 'text', 'content', 'result', 'answer', 'summary']
+
+function unwrapResponse(response) {
+  if (typeof response !== 'object' || response === null || Array.isArray(response)) return null
+  if (isSeoAuditPayload(response)) return null
+  for (const key of WRAPPER_KEYS) {
+    if (typeof response[key] === 'string' && response[key].trim()) return response[key]
+  }
+  return null
+}
+
 function detectOutputType(response) {
   if (!response) return 'empty'
   const parsed = parseJsonPayload(response)
@@ -182,6 +196,9 @@ function detectOutputType(response) {
     }
   }
 
+  const pipeRows = lines.filter(l => l.trim().startsWith('|') && l.trim().endsWith('|'))
+  if (pipeRows.length >= 2) return 'markdown'
+
   if (trimmed.includes('# ') || trimmed.includes('**') || trimmed.includes('- ') || trimmed.includes('> ') || trimmed.includes('* ')) {
     return 'markdown'
   }
@@ -199,7 +216,37 @@ function detectLanguage(code) {
 }
 
 // ── Renderers ─────────────────────────────────────────────────
+const KV_LINE = /^([A-Za-z][A-Za-z0-9 _/-]{1,40}):\s+(.+)$/
+
 function TextRenderer({ content }) {
+  const lines = content.split('\n')
+  const nonEmpty = lines.filter(l => l.trim())
+  const kvLines = nonEmpty.filter(l => KV_LINE.test(l.trim()))
+
+  // Freeform "Label: value" lines read better as real key:value pairs than as
+  // one pre-wrapped blob — but only promote when most lines actually match,
+  // so a stray colon in a sentence doesn't hijack normal prose.
+  if (nonEmpty.length >= 2 && kvLines.length / nonEmpty.length >= 0.6) {
+    return (
+      <dl className="divide-y divide-border">
+        {nonEmpty.map((line, i) => {
+          const match = line.trim().match(KV_LINE)
+          if (!match) {
+            return <p key={i} className="py-2 text-sm text-text-secondary">{line}</p>
+          }
+          return (
+            <div key={i} className="py-2.5 first:pt-0 last:pb-0">
+              <dd className="text-sm text-text-primary">
+                <span className="text-xs font-mono text-text-dim uppercase tracking-wide">{formatFieldLabel(match[1])}:</span>{' '}
+                {match[2]}
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+    )
+  }
+
   return (
     <div className="text-[var(--color-text-secondary)] text-sm leading-relaxed whitespace-pre-wrap break-words font-body">
       {content}
@@ -615,7 +662,8 @@ function MarkdownRenderer({ content }) {
 // ── Main OutputRenderer ───────────────────────────────────────
 export default function OutputRenderer({ response, latency, success }) {
   const [expanded, setExpanded] = useState(true)
-  const type = useMemo(() => detectOutputType(response), [response])
+  const effectiveResponse = useMemo(() => unwrapResponse(response) ?? response, [response])
+  const type = useMemo(() => detectOutputType(effectiveResponse), [effectiveResponse])
 
   if (!response) return null
 
@@ -682,14 +730,14 @@ export default function OutputRenderer({ response, latency, success }) {
             className="overflow-hidden"
           >
             <div className="p-4">
-              {type === 'text' && <TextRenderer content={response} />}
-              {type === 'code' && <CodeRenderer content={response} />}
-              {type === 'seo' && <SeoAuditRenderer content={response} />}
-              {type === 'json' && <JsonRenderer content={response} />}
-              {type === 'csv' && <CsvRenderer content={response} />}
-              {type === 'datauri' && <DataUriRenderer content={response} />}
-              {type === 'url' && <UrlRenderer content={response} />}
-              {type === 'markdown' && <MarkdownRenderer content={response} />}
+              {type === 'text' && <TextRenderer content={effectiveResponse} />}
+              {type === 'code' && <CodeRenderer content={effectiveResponse} />}
+              {type === 'seo' && <SeoAuditRenderer content={effectiveResponse} />}
+              {type === 'json' && <JsonRenderer content={effectiveResponse} />}
+              {type === 'csv' && <CsvRenderer content={effectiveResponse} />}
+              {type === 'datauri' && <DataUriRenderer content={effectiveResponse} />}
+              {type === 'url' && <UrlRenderer content={effectiveResponse} />}
+              {type === 'markdown' && <MarkdownRenderer content={effectiveResponse} />}
               {type === 'empty' && (
                 <div className="text-[var(--color-text-dim)] text-sm font-mono">No output returned</div>
               )}

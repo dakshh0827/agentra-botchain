@@ -5,8 +5,7 @@ import { useAccount } from 'wagmi'
 import { useWeb3Modal } from '@web3modal/wagmi/react'
 import {
   X, Send, Loader2, ExternalLink, MessageSquare, Terminal, AlertCircle,
-  FileText, FileSpreadsheet, FileDown, Table2, History, LayoutGrid,
-  CheckCircle2, Trash2, Wallet, ShoppingCart, Lock,
+  History, LayoutGrid, CheckCircle2, Trash2, Wallet, ShoppingCart, Lock,
 } from 'lucide-react'
 import { agentsAPI } from '../../api/agents'
 import { streamSSE } from '../../api/stream'
@@ -14,21 +13,60 @@ import AgentAvatar from './AgentAvatar'
 import ReportCard from './ReportCard'
 import ComparisonCard from './ComparisonCard'
 import { getAgentExternalId } from '../../utils/helpers'
-import { featuresForAgent, isSeoAgent } from '../../utils/agentFeatures'
+import { capabilitiesFor } from '../../utils/agentCapabilities'
 
-function placeholderFor(agent) {
-  if (isSeoAgent(agent)) {
-    return 'e.g. crawl 10 pages on example.com · technical SEO only for mysite.com · compare a.com with b.com'
+const COMPARE_INTENT = /\b(compare|versus|vs\.?|against|competitor)\b/i
+const AUDIT_INTENT = /\b(audit|re-?audit|crawl|scan|seo\s+check|check\s+(this\s+)?site)\b/i
+const BARE_HOST = /\b((?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d+)?(?:\/\S*)?/gi
+const FULL_URL = /https?:\/\/[^\s<>"']+/gi
+
+function normalizeHost(value) {
+  if (!value) return ''
+  try {
+    const raw = String(value).trim()
+    const withProto = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    return new URL(withProto).hostname.replace(/^www\./i, '').toLowerCase()
+  } catch {
+    return String(value).replace(/^www\./i, '').toLowerCase()
   }
-  return 'Describe what you want this agent to do…'
 }
 
-const SEO_DELIVERABLES = [
-  { icon: FileText, label: 'HTML', tone: 'text-sky-700 bg-sky-50 border-sky-200' },
-  { icon: FileDown, label: 'PDF', tone: 'text-rose-700 bg-rose-50 border-rose-200' },
-  { icon: FileSpreadsheet, label: 'Excel', tone: 'text-emerald-800 bg-emerald-50 border-emerald-200' },
-  { icon: Table2, label: 'Sheets CSV', tone: 'text-green-800 bg-green-50 border-green-200' },
-]
+function hostsInText(text) {
+  const found = []
+  const seen = new Set()
+  for (const re of [FULL_URL, BARE_HOST]) {
+    re.lastIndex = 0
+    let match
+    while ((match = re.exec(text || ''))) {
+      const host = normalizeHost(match[0])
+      if (!host || host.endsWith('.jpg') || host.endsWith('.png') || host.endsWith('.pdf')) continue
+      if (seen.has(host)) continue
+      seen.add(host)
+      found.push(host)
+    }
+  }
+  return found
+}
+
+
+function wantsFreshRun(text, report) {
+  const hosts = hostsInText(text)
+  if (!hosts.length) return false
+  if (COMPARE_INTENT.test(text)) return false
+
+  const current = normalizeHost(report?.host || report?.url || '')
+  if (!current) return true
+  if (hosts.some((h) => h !== current)) return true
+  if (AUDIT_INTENT.test(text)) return true
+
+  // Message is basically just a site URL → treat as a new run of that site.
+  const compact = text.trim().replace(/^https?:\/\//i, '').replace(/\/$/, '')
+  return hosts.length === 1 && compact.length <= hosts[0].length + 12
+}
+
+// One flat chip style for every deliverable. The per-format colours these replaced
+// competed with the agent's own content for attention.
+const deliverableTone = 'text-[var(--color-text-secondary)] bg-[var(--color-bg)] border-[var(--color-border)]'
 
 const TABS = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
@@ -36,33 +74,29 @@ const TABS = [
   { id: 'features', label: 'Features', icon: LayoutGrid },
 ]
 
-function FeatureGrid({ agent }) {
-  const seo = isSeoAgent(agent)
-  const features = featuresForAgent(agent)
+function FeatureGrid({ caps }) {
+  const { features, deliverables } = caps
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-[15px] font-bold tracking-tight text-[var(--color-text-primary)] mb-1">
-          {seo ? 'What it checks' : 'What this agent does'}
+          {caps.featuresTitle}
         </h3>
         <p className="text-xs text-[var(--color-text-muted)] mb-3.5 leading-relaxed">
-          {seo
-            ? 'Measured from a live crawl — not invented rankings or backlinks.'
-            : 'Derived from this agent’s category, tags, and description — not a shared template.'}
+          {caps.featuresBlurb}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {features.map(({ icon: Icon, title, blurb, wrap, tone, iconWrap }) => (
             <div
               key={title}
               className={`group relative overflow-hidden flex items-start gap-3.5 rounded-2xl border
-                          px-3.5 py-3.5 shadow-sm transition-all duration-200
-                          hover:-translate-y-0.5 hover:shadow-md
+                          px-3.5 py-3.5 transition-colors duration-150
                           ${tone || 'border-[var(--color-border)] bg-[var(--color-bg)]'}`}
             >
               <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-md
-                            ${iconWrap || `${wrap || 'bg-slate-700'} text-white`}`}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0
+                            ${iconWrap || `${wrap || 'bg-primary'} text-white`}`}
               >
                 <Icon size={18} strokeWidth={2.25} />
               </div>
@@ -79,20 +113,20 @@ function FeatureGrid({ agent }) {
         </div>
       </div>
 
-      {seo && (
+      {deliverables.length > 0 && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <h3 className="text-[15px] font-bold tracking-tight text-[var(--color-text-primary)] mb-1">
             You get
           </h3>
           <p className="text-xs text-[var(--color-text-muted)] mb-3.5">
-            Downloadable after every successful audit.
+            Downloadable after a successful run that produces them.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {SEO_DELIVERABLES.map(({ icon: Icon, label, tone }) => (
+            {deliverables.map(({ key, label, Icon }) => (
               <span
-                key={label}
+                key={key}
                 className={`inline-flex flex-col items-center justify-center gap-1.5 px-3 py-3
-                            rounded-xl border text-xs font-bold shadow-sm ${tone}`}
+                            rounded-xl border text-xs font-bold ${deliverableTone}`}
               >
                 <Icon size={18} strokeWidth={2.2} />
                 {label}
@@ -201,11 +235,26 @@ export default function TryAgentModal({ agent, open, onClose }) {
   const [phase, setPhase] = useState(null)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  // Trial allowance for this wallet on this agent, refreshed after every run
+  const [freeRuns, setFreeRuns] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
   const agentId = agent ? getAgentExternalId(agent) : null
-  const seo = isSeoAgent(agent)
+  const caps = useMemo(() => capabilitiesFor(agent), [agent])
+
+  const loadAccess = useCallback(async () => {
+    if (!agentId || !isConnected) {
+      setFreeRuns(null)
+      return
+    }
+    try {
+      const res = await agentsAPI.checkAccess(agentId)
+      setFreeRuns(res.data?.freeRuns || null)
+    } catch {
+      setFreeRuns(null)
+    }
+  }, [agentId, isConnected])
 
   const loadHistory = useCallback(async () => {
     if (!agentId || !isConnected) {
@@ -239,15 +288,14 @@ export default function TryAgentModal({ agent, open, onClose }) {
             {
               role: 'system',
               showLabel: true,
-              text: seo
-                ? `${agent?.name || 'Agent'} is ready. Name a site to audit — then ask follow-ups about the report.`
-                : `${agent?.name || 'Agent'} is ready. Send a concrete task to run.`,
+              text: `${agent?.name || 'Agent'} is ready. ${caps.readyMessage}`,
             },
           ]
         : [],
     )
 
     let active = true
+    loadAccess()
     if (agentId && isConnected) {
       agentsAPI
         .getConversation(agentId)
@@ -280,7 +328,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
       active = false
       clearTimeout(t)
     }
-  }, [open, agent, agentId, isConnected, seo])
+  }, [open, agent, agentId, isConnected, caps, loadAccess])
 
   // After connect while modal is open, land on chat ready to run
   useEffect(() => {
@@ -312,7 +360,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
     }
   }, [open, onClose])
 
-  const run = useCallback(async () => {
+  const run = useCallback(async ({ forceNewRun = false } = {}) => {
     const text = task.trim()
     if (!text || !agentId || busy) return
 
@@ -328,7 +376,10 @@ export default function TryAgentModal({ agent, open, onClose }) {
     setTask('')
 
     try {
-      if (reportId && canChat) {
+      // Two ways to leave the chat channel and start over: the user asked for it
+      // outright, or the agent opted into detecting a new target from the message.
+      const freshRun = forceNewRun || (caps.multiRun && wantsFreshRun(text, report))
+      if (reportId && canChat && !freshRun) {
         let streamed = ''
         setTurns((prev) => [...prev, { role: 'agent', text: '' }])
 
@@ -356,6 +407,13 @@ export default function TryAgentModal({ agent, open, onClose }) {
         )
         loadHistory()
         return
+      }
+
+      if (freshRun) {
+        setReportId(null)
+        setReport(null)
+        setComparison(null)
+        setCanChat(false)
       }
 
       let streamedResult = null
@@ -418,6 +476,22 @@ export default function TryAgentModal({ agent, open, onClose }) {
         setCanChat(!!streamedResult.canChat)
         if (streamedResult.reportId) setReport(streamedResult)
         if (streamedResult.comparisonId) setComparison(streamedResult)
+
+        // An agent can finish with a result payload but never stream a token, which
+        // leaves the placeholder bubble blank and the run looking like it failed.
+        if (!spokenText) {
+          const said =
+            streamedResult.spokenSummary ||
+            streamedResult.summary ||
+            (streamedResult.reportId ? 'Run finished — see the report below.' : 'Run finished.')
+          setTurns((prev) => {
+            const next = [...prev]
+            const last = next[next.length - 1]
+            if (last?.role === 'agent' && !last.text) next[next.length - 1] = { role: 'agent', text: said }
+            return next
+          })
+        }
+
         loadHistory()
         return
       }
@@ -467,8 +541,9 @@ export default function TryAgentModal({ agent, open, onClose }) {
     } finally {
       setBusy(false)
       setPhase(null)
+      loadAccess()
     }
-  }, [task, agentId, busy, isConnected, reportId, canChat, loadHistory])
+  }, [task, agentId, busy, isConnected, reportId, canChat, loadHistory, loadAccess, caps, report])
 
   const liveCount = useMemo(
     () => turns.filter((t) => t.role === 'user' || t.role === 'agent').length,
@@ -497,24 +572,21 @@ export default function TryAgentModal({ agent, open, onClose }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="try-agent-title"
-            initial={{ opacity: 0, y: 28, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
             className="relative w-full max-w-6xl h-[min(94vh,900px)] flex flex-col rounded-3xl
-                       border border-[rgba(172,100,247,0.32)]
+                       border border-[var(--color-border)]
                        bg-[var(--color-panel)]
-                       shadow-[0_32px_90px_rgba(111,53,178,0.28),0_0_0_1px_rgba(172,100,247,0.12)]
                        overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Premium header band */}
+            {/* Header band */}
             <div className="shrink-0 relative overflow-hidden border-b border-[var(--color-border)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#AC64F7]/12 via-transparent to-[#6F35B2]/08 pointer-events-none" />
               <div className="relative px-5 sm:px-7 pt-5 pb-0">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="rounded-2xl overflow-hidden shrink-0 ring-2 ring-[rgba(172,100,247,0.35)]
-                                  shadow-[0_4px_16px_rgba(111,53,178,0.3)]">
+                  <div className="rounded-2xl overflow-hidden shrink-0 border border-[var(--color-border)]">
                     <AgentAvatar agent={agent} size={52} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -539,12 +611,12 @@ export default function TryAgentModal({ agent, open, onClose }) {
                     <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] mt-1.5 line-clamp-2 max-w-3xl">
                       {agent.description || 'No description provided.'}
                     </p>
-                    {seo && (
+                    {caps.deliverables.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
-                        {SEO_DELIVERABLES.map(({ icon: Icon, label, tone }) => (
+                        {caps.deliverables.map(({ key, label, Icon }) => (
                           <span
-                            key={label}
-                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${tone}`}
+                            key={key}
+                            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-bold ${deliverableTone}`}
                           >
                             <Icon size={12} />
                             {label}
@@ -619,8 +691,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                 <div className="px-5 sm:px-7 py-5 space-y-3 min-h-full">
                   {!isConnected ? (
                     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)]
-                                    p-6 sm:p-8 text-center max-w-lg mx-auto my-6 shadow-sm">
-                      <div className="mx-auto w-12 h-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center mb-4">
+                                    p-6 sm:p-8 text-center max-w-lg mx-auto my-6">
+                      <div className="mx-auto w-12 h-12 rounded-2xl bg-primary text-white flex items-center justify-center mb-4">
                         <Lock size={20} />
                       </div>
                       <h3 className="text-base font-bold text-[var(--color-text-primary)]">
@@ -634,9 +706,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                         <button
                           type="button"
                           onClick={() => openWallet()}
-                          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                     bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
-                                     hover:brightness-110 transition-all cursor-pointer"
+                          className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                     transition-colors cursor-pointer"
                         >
                           <Wallet size={14} /> Connect wallet
                         </button>
@@ -701,7 +772,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
                     </div>
                   )}
 
-                  {report && <ReportCard report={report} />}
+                  {report && <ReportCard report={report} agent={agent} />}
                   {comparison && <ComparisonCard comparison={comparison} />}
 
                   {error && !busy && (
@@ -728,8 +799,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white cursor-pointer"
+                        className="btn-primary inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold cursor-pointer"
                       >
                         <Wallet size={14} /> Connect wallet
                       </button>
@@ -756,22 +826,22 @@ export default function TryAgentModal({ agent, open, onClose }) {
               {tab === 'features' && (
                 <div className="px-5 sm:px-7 py-6 space-y-4">
                   {!isConnected && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3
+                    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3.5 py-3
                                     flex flex-col sm:flex-row sm:items-center gap-3">
-                      <p className="text-xs text-amber-900/80 leading-relaxed flex-1">
+                      <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed flex-1">
                         Preview mode — explore what this agent does. Connect to run it or purchase access.
                       </p>
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
-                                   text-[11px] font-bold bg-slate-900 text-white hover:bg-slate-800 cursor-pointer"
+                        className="btn-primary shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg
+                                   text-[11px] font-bold transition-colors cursor-pointer"
                       >
                         <Wallet size={12} /> Connect
                       </button>
                     </div>
                   )}
-                  <FeatureGrid agent={agent} />
+                  <FeatureGrid caps={caps} />
                 </div>
               )}
             </div>
@@ -779,8 +849,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
             {/* Composer / gate CTA */}
             <div className="shrink-0 px-4 sm:px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-panel)]">
               {!isConnected ? (
-                <div className="rounded-2xl border border-[rgba(172,100,247,0.28)]
-                                bg-gradient-to-br from-[rgba(172,100,247,0.10)] to-[rgba(111,53,178,0.06)]
+                <div className="rounded-2xl border border-[var(--color-border)]
+                                bg-[var(--color-bg-secondary)]
                                 p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="min-w-0 flex-1">
@@ -795,9 +865,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
                       <button
                         type="button"
                         onClick={() => openWallet()}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
-                                   bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] text-white
-                                   hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.35)]"
+                        className="btn-primary inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold
+                                   transition-colors cursor-pointer"
                       >
                         <Wallet size={14} /> Connect wallet
                       </button>
@@ -824,6 +893,23 @@ export default function TryAgentModal({ agent, open, onClose }) {
                   ← Back to chat to run
                 </button>
               )}
+              {reportId && canChat && (
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <span className="text-[10px] text-[var(--color-text-dim)]">
+                    Follow-ups continue this run.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => run({ forceNewRun: true })}
+                    disabled={busy || !task.trim()}
+                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary
+                               disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:underline"
+                    title={task.trim() ? 'Run this as a new task' : 'Type a task first'}
+                  >
+                    <Terminal size={10} /> Start a new run instead
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2 rounded-2xl border border-[rgba(172,100,247,0.35)]
                               bg-[var(--color-bg)] focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(172,100,247,0.12)]
                               transition-all px-3 py-2">
@@ -841,8 +927,10 @@ export default function TryAgentModal({ agent, open, onClose }) {
                   }}
                   placeholder={
                     reportId && canChat
-                      ? 'Ask about this report…'
-                      : placeholderFor(agent)
+                      ? (caps.multiRun
+                          ? 'Ask about this result — or name another target for a fresh run'
+                          : 'Ask a follow-up about this result')
+                      : caps.inputHint
                   }
                   className="flex-1 resize-none bg-transparent border-0 outline-none text-sm
                              text-[var(--color-text-primary)] placeholder:text-[var(--color-text-dim)]
@@ -850,11 +938,11 @@ export default function TryAgentModal({ agent, open, onClose }) {
                 />
                 <button
                   type="button"
-                  onClick={run}
+                  onClick={() => run()}
                   disabled={busy || !task.trim()}
-                  className="shrink-0 w-11 h-11 rounded-full bg-gradient-to-br from-[#AC64F7] to-[#6F35B2]
-                             text-white flex items-center justify-center disabled:opacity-40
-                             hover:brightness-110 transition-all cursor-pointer shadow-[0_4px_14px_rgba(111,53,178,0.45)]"
+                  className="btn-primary shrink-0 w-11 h-11 rounded-full
+                             flex items-center justify-center disabled:opacity-40
+                             transition-colors cursor-pointer"
                   aria-label="Run"
                 >
                   {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
@@ -862,6 +950,14 @@ export default function TryAgentModal({ agent, open, onClose }) {
               </div>
               <div className="mt-2 flex items-center justify-between gap-2 px-1">
                 <span className="text-[10px] text-[var(--color-text-dim)]">
+                  {freeRuns && freeRuns.remaining > 0 ? (
+                    <>
+                      <span className="text-primary font-semibold">
+                        {freeRuns.remaining} of {freeRuns.allowance} free run(s) left
+                      </span>
+                      {' · '}
+                    </>
+                  ) : null}
                   Enter to send · Esc to close · History saves per wallet
                 </span>
                 <Link

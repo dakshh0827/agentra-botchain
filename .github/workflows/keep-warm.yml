@@ -1,0 +1,56 @@
+name: Keep backend warm
+
+# Render's free tier sleeps a web service after ~15 minutes of no traffic, and the
+# next visitor pays a 30-60s cold start. This pings the liveness probe often enough
+# that the instance never gets to sleep.
+#
+# Needs a repository variable with the deployed origin (Settings -> Secrets and
+# variables -> Actions -> Variables):
+#   BACKEND_URL = https://agentra-0g.onrender.com
+# BACKEND is accepted as an alias; a trailing slash is fine. Without one of them the
+# job skips instead of failing every ten minutes.
+#
+# Scheduled workflows only run from the repository's DEFAULT branch.
+
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping liveness probe
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL || vars.BACKEND }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "Neither BACKEND_URL nor BACKEND repository variable is set — skipping."
+            exit 0
+          fi
+
+          url="${BACKEND_URL%/}/healthz"
+          echo "Pinging $url"
+          for attempt in 1 2 3; do
+            code=$(curl --silent --show-error --location \
+                        --max-time 90 --output /dev/null --write-out '%{http_code}' \
+                        "$url" || echo "000")
+
+            if [ "$code" = "200" ]; then
+              echo "Awake (HTTP $code) on attempt $attempt"
+              exit 0
+            fi
+
+            echo "Attempt $attempt returned HTTP $code"
+            [ "$attempt" -lt 3 ] && sleep 15
+          done
+
+          echo "::warning::Backend did not answer 200 after 3 attempts"
+          exit 1

@@ -6,14 +6,14 @@ import config from '../config/config.js'
 import { getAgentAccessState, recordAgentPurchase } from '../services/accessService.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
 import { ethers } from 'ethers'
-import { z } from 'zod'
 import { encryptLlmKey as encryptSecretValue, reSealDataKeyForTransfer } from '../utils/cryptoKey.js'
 import {
   resolveAgentMetadata,
   uploadAgentMetadata,
   uploadEncryptedAgentIntelligence,
-  resolveEncryptedAgentIntelligence,
 } from '../services/storageService.js'
+import { deploySchema, updateSchema } from '../schemas/agentSchema.js'
+import { resolveCapabilities } from '../services/capabilitiesService.js'
 
 const AGENTRA_CONFIRM_EVENT_ABI = [
   'event AgentDeployed(uint256 indexed agentId, address indexed creator, uint8 tier, uint256 listingFeePaidUSD)',
@@ -30,86 +30,6 @@ function buildAgentLookup(id) {
   if (isContractAgentId) return { OR: [{ agentId: value }, { contractAgentId: Number(value) }] }
   return { agentId: value }
 }
-
-// ── Validation schemas ────────────────────────────────────────
-
-const executionContentTypeSchema = z.enum(['json', 'form-data', 'x-www-form-urlencoded'])
-
-const executionFieldTypeSchema = z.enum(['text', 'textarea', 'number', 'file', 'password', 'boolean'])
-
-const executionHeaderFieldSchema = z.object({
-  key: z.string().min(1).max(100),
-  value: z.string().optional(),
-  required: z.boolean(),
-  secret: z.boolean(),
-  userProvided: z.boolean(),
-  placeholder: z.string().optional(),
-  description: z.string().optional(),
-})
-
-const executionBodyFieldSchema = z.object({
-  key: z.string().min(1).max(100).regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Key must be a valid identifier'),
-  type: executionFieldTypeSchema,
-  value: z.string().optional(),
-  secret: z.boolean().optional().default(false),
-  required: z.boolean(),
-  userProvided: z.boolean(),
-  placeholder: z.string().optional(),
-  description: z.string().optional(),
-})
-
-const executionConfigSchema = z.object({
-  method: z.literal('POST'),
-  contentType: executionContentTypeSchema,
-  headers: z.array(executionHeaderFieldSchema).max(20),
-  bodyFields: z.array(executionBodyFieldSchema).max(30),
-}).superRefine((config, ctx) => {
-  const headerKeys = config.headers.map(h => h.key)
-  const bodyKeys = config.bodyFields.map(f => f.key)
-  if (new Set(headerKeys).size !== headerKeys.length) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate header keys are not allowed' })
-  }
-  if (new Set(bodyKeys).size !== bodyKeys.length) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Duplicate body field keys are not allowed' })
-  }
-})
-
-const deploySchema = z.object({
-  name: z.string().min(2).max(64),
-  description: z.string().min(10).max(1000).optional(),
-  category: z.enum(['Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']),
-  tags: z.array(z.string().max(32)).max(10).optional(),
-  pricing: z.string(), // monthly price in wei
-  lifetimeMultiplier: z.number().int().min(1).max(36).optional().default(12),
-  commsEnabled: z.boolean().optional().default(false),
-  commsPricePerCall: z.string().optional().default('0'),
-  tier: z.enum(['Standard', 'Professional', 'Enterprise']),
-  endpoint: z.string().url(),
-  mcpSchema: z.record(z.string(), z.unknown()).optional(),
-  executionConfig: executionConfigSchema.optional(),
-  deployMode: z.enum(['database', 'blockchain']).optional(),
-  status: z.string().optional(),
-  // ERC-7857 fields
-  avatarUrl: z.string().url().optional(),       // public, shown in marketplace UI
-  intelligence: z.object({                       // the actual "brain" — gets encrypted
-    systemPrompt: z.string().optional(),
-    modelProvider: z.string().optional(),
-    modelConfig: z.record(z.string(), z.unknown()).optional(),
-    memorySeed: z.unknown().optional(),
-  }).optional(),
-})
-
-const updateSchema = z.object({
-  name: z.string().min(2).max(64).optional(),
-  description: z.string().min(10).max(1000).optional(),
-  endpoint: z.string().url().optional(),
-  pricing: z.string().optional(),
-  lifetimeMultiplier: z.number().int().min(1).max(36).optional(),
-  commsEnabled: z.boolean().optional(),
-  commsPricePerCall: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  category: z.enum(['Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']).optional(),
-})
 
 function encryptExecutionConfigSecrets(executionConfig) {
   if (!executionConfig) return executionConfig
@@ -181,10 +101,13 @@ const getAgentManifest = asyncHandler(async (req, res) => {
 
   const manifest = await resolveAgentMetadata(agent.metadataUri)
 
-  console.log('\n====== MANIFEST FETCH ======')
-  console.log('Agent ID:', req.params.agentId)
-  console.log(JSON.stringify(manifest, null, 2))
-  console.log('============================\n')
+
+if (agent.capabilities) manifest.capabilities = agent.capabilities
+
+console.log('\n====== MANIFEST FETCH ======')
+console.log('Agent ID:', req.params.agentId)
+console.log(JSON.stringify(manifest, null, 2))
+console.log('============================\n')
 
   res.json(manifest)
 })
@@ -195,6 +118,12 @@ const deployAgent = asyncHandler(async (req, res) => {
   await ensureUniqueAgentName(data.name)
 
   const encryptedExecutionConfig = encryptExecutionConfigSecrets(data.executionConfig)
+
+  
+  const capabilities = await resolveCapabilities({
+    declared: data.capabilities,
+    endpoint: data.endpoint,
+  })
 
   const metadataPayload = {
     name: data.name,
@@ -209,6 +138,7 @@ const deployAgent = asyncHandler(async (req, res) => {
     commsPricePerCall: data.commsPricePerCall || '0',
     mcpSchema: data.mcpSchema || null,
     executionConfig: stripExecutionConfigSecrets(data.executionConfig) || null,
+    capabilities: capabilities || null,
     deployMode: data.deployMode || 'database',
   }
 
@@ -240,22 +170,23 @@ const deployAgent = asyncHandler(async (req, res) => {
   if (!isBlockchain) {
     const agent = await prisma.agent.create({
       data: {
-        name: data.name,
-        description: data.description,
-        metadataUri: metadataURI,
-        ownerWallet: req.walletAddress,
-        endpoint: data.endpoint,
-        tier: data.tier,
-        pricing: data.pricing,
-        lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
-        commsEnabled: data.commsEnabled ?? false,
-        commsPricePerCall: data.commsPricePerCall || '0',
-        category: data.category,
-        tags: data.tags || [],
-        mcpSchema: data.mcpSchema || null,
-        executionConfig: encryptedExecutionConfig || null,
-        status: 'active',
-        txHash: null,
+      name: data.name,
+      description: data.description,
+      metadataUri: metadataURI,
+      ownerWallet: req.walletAddress,
+      endpoint: data.endpoint,
+      tier: data.tier,
+      pricing: data.pricing,
+      lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
+      commsEnabled: data.commsEnabled ?? false,
+      commsPricePerCall: data.commsPricePerCall || '0',
+      category: data.category,
+      tags: data.tags || [],
+      mcpSchema: data.mcpSchema || null,
+      executionConfig: encryptedExecutionConfig || null,
+      capabilities: capabilities || null,
+      status: 'active',
+      txHash: null,
       },
     })
 
@@ -275,23 +206,24 @@ const deployAgent = asyncHandler(async (req, res) => {
   // once the transaction is mined.
   const agent = await prisma.agent.create({
     data: {
-      name: data.name,
-      description: data.description,
-      metadataUri: metadataURI,             // public display doc, unchanged meaning
-      intelligenceUri: sevenEightFiveSeven?.intelligenceUri || null,   // NEW field
-      ownerWallet: req.walletAddress,
-      endpoint: data.endpoint,
-      tier: data.tier,
-      pricing: data.pricing,
-      lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
-      commsEnabled: data.commsEnabled ?? false,
-      commsPricePerCall: data.commsPricePerCall || '0',
-      category: data.category,
-      tags: data.tags || [],
-      mcpSchema: data.mcpSchema || null,
-      executionConfig: encryptedExecutionConfig || null,
-      status: 'draft',
-      txHash: null,
+    name: data.name,
+    description: data.description,
+    metadataUri: metadataURI,             // public display doc, unchanged meaning
+    intelligenceUri: sevenEightFiveSeven?.intelligenceUri || null,   // NEW field
+    ownerWallet: req.walletAddress,
+    endpoint: data.endpoint,
+    tier: data.tier,
+    pricing: data.pricing,
+    lifetimeMultiplier: data.lifetimeMultiplier ?? 12,
+    commsEnabled: data.commsEnabled ?? false,
+    commsPricePerCall: data.commsPricePerCall || '0',
+    category: data.category,
+    tags: data.tags || [],
+    mcpSchema: data.mcpSchema || null,
+    executionConfig: encryptedExecutionConfig || null,
+    capabilities: capabilities || null,
+    status: 'draft',
+    txHash: null,
     },
   })
 
@@ -626,10 +558,19 @@ const checkAccess = asyncHandler(async (req, res) => {
   const accessState = await getAgentAccessState(agent, walletAddress)
 
   if (accessState.hasAccess) {
-    return res.json({ hasAccess: true, reason: accessState.reason, expiresAt: accessState.access?.expiresAt || accessState.purchase?.expiresAt || null })
+    return res.json({
+      hasAccess: true,
+      reason: accessState.reason,
+      expiresAt: accessState.access?.expiresAt || accessState.purchase?.expiresAt || null,
+      freeRuns: accessState.freeRuns || null,
+    })
   }
 
-  res.json({ hasAccess: false })
+  res.json({
+    hasAccess: false,
+    reason: accessState.reason || null,
+    freeRuns: accessState.freeRuns || null,
+  })
 })
 
 // ── UPDATE / DELETE ───────────────────────────────────────────
@@ -655,7 +596,31 @@ const deleteAgent = asyncHandler(async (req, res) => {
   res.json({ message: 'Agent deactivated successfully' })
 })
 
-// ── OTHER ─────────────────────────────────────────────────────
+
+
+const refreshCapabilities = asyncHandler(async (req, res) => {
+  const agent = await prisma.agent.findFirst({ where: buildAgentLookup(req.params.agentId) })
+  if (!agent) return res.status(404).json({ error: 'Agent not found' })
+  if (agent.ownerWallet !== (req.walletAddress || '').toLowerCase()) {
+    return res.status(403).json({ error: 'Not authorized' })
+  }
+
+  const capabilities = await resolveCapabilities({
+    declared: req.body?.capabilities,
+    endpoint: agent.endpoint,
+  })
+
+  await prisma.agent.update({
+    where: { id: agent.id },
+    data: { capabilities: capabilities || null },
+  })
+
+  res.json({
+    capabilities,
+    source: capabilities ? (req.body?.capabilities ? 'declared' : 'probed') : 'none',
+  })
+})
+
 const validateEndpoint = asyncHandler(async (req, res) => {
   const { endpoint } = req.body
   if (!endpoint) return res.status(400).json({ error: 'endpoint required' })
@@ -732,6 +697,7 @@ export {
   updateAgent,
   deleteAgent,
   validateEndpoint,
+  refreshCapabilities,
   searchAgents,
   prepareTransfer,
   confirmTransfer,

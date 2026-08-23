@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
-import { z } from 'zod'
+import { createReviewSchema } from '../schemas/reviewSchema.js'
 
 function buildAgentLookup(id) {
   const value = String(id || '').trim()
@@ -11,11 +11,6 @@ function buildAgentLookup(id) {
   return { agentId: value }
 }
 
-const createSchema = z.object({
-  content: z.string().min(1).max(5000),
-  rating: z.number().int().min(0).max(5).optional().default(0),
-  parentId: z.string().optional(),
-})
  
 // ── GET /api/agents/:agentId/reviews ──────────────────────────
 const getReviews = asyncHandler(async (req, res) => {
@@ -117,7 +112,7 @@ const getReviews = asyncHandler(async (req, res) => {
 const createReview = asyncHandler(async (req, res) => {
   const { agentId } = req.params
   const walletAddress = req.walletAddress
-  const data = createSchema.parse(req.body)
+  const data = createReviewSchema.parse(req.body)
 
   // Always look up by agentId (cuid)
   const agent = await prisma.agent.findFirst({

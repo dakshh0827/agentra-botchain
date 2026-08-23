@@ -5,13 +5,13 @@ import { useWeb3Modal } from '@web3modal/wagmi/react'
 import { X, Wallet, ShoppingCart } from 'lucide-react'
 import AgentAvatar from './AgentAvatar'
 import { getAgentExternalId } from '../../utils/helpers'
-import { featuresForAgent } from '../../utils/agentFeatures'
+import { capabilitiesFor } from '../../utils/agentCapabilities'
 
 
 export default function AgentPreviewModal({ agent, open, onClose }) {
   const { open: openWallet } = useWeb3Modal()
   const agentId = agent ? getAgentExternalId(agent) : null
-  const features = featuresForAgent(agent)
+  const features = capabilitiesFor(agent).features
 
   useEffect(() => {
     if (!open) return

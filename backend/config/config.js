@@ -57,6 +57,14 @@ const config = {
     cronSchedule: process.env.RESOLVER_CRON_SCHEDULE || '*/2 * * * *',
   },
 
+  freeTier: {
+   
+    openAccess: String(process.env.FREE_AGENT_ACCESS || '').toLowerCase() === 'true',
+    runsPerAgent: Number.isFinite(parseInt(process.env.FREE_RUNS_PER_AGENT))
+      ? parseInt(process.env.FREE_RUNS_PER_AGENT)
+      : 25,
+  },
+
   platform: {
     maxCallDepth: parseInt(process.env.MAX_CALL_DEPTH) || 5,
     callTimeoutMs: parseInt(process.env.CALL_TIMEOUT_MS) || 600000, // 10 minutes for Hugging Face models
@@ -84,5 +92,8 @@ console.log('[CONFIG] Has Private Key:', !!config.blockchain.privateKey)
 console.log('[CONFIG] Storage RPC URL:', config.storage.rpcUrl || '(not set)')
 console.log('[CONFIG] Storage Indexer RPC:', config.storage.indexerRpc || '(not set)')
 console.log('[CONFIG] Has Storage Private Key:', !!config.storage.privateKey)
+console.log('[CONFIG] Free tier:', config.freeTier.openAccess
+  ? 'OPEN ACCESS (all agents free for any wallet)'
+  : `${config.freeTier.runsPerAgent} free run(s) per wallet per agent`)
 
 export default config

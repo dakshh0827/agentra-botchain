@@ -26,11 +26,7 @@ import { startResolverJob } from './jobs/resolverJob.js'
 
 const app = express()
 
-// ── Disable ETags globally ─────────────────────────────────────
-// Without this, Express compares response bodies and sends 304 Not Modified,
-// causing browsers to serve stale cached API responses. This is especially
-// harmful for access/upvote checks where the answer depends on which wallet
-// is currently connected — the browser has no way to know the wallet changed.
+
 app.set('etag', false)
 
 // ── Core middleware ────────────────────────────────────────────
@@ -63,15 +59,17 @@ app.use(
   })
 )
 
+
+app.get('/healthz', (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  res.json({ status: 'ok', uptime: Math.round(process.uptime()) })
+})
+
 app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true, limit: '25mb' }))
 app.use(morgan(config.isDev ? 'dev' : 'combined'))
 app.use(apiLimiter)
 
-// ── No-cache middleware for all /api routes ────────────────────
-// Forces the browser and any proxies to always make a real request
-// instead of serving a cached response. Critical for wallet-dependent
-// endpoints like /access and /upvote-status.
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
   res.set('Pragma', 'no-cache')
@@ -79,7 +77,9 @@ app.use('/api', (req, res, next) => {
   next()
 })
 
-// ── Health check ───────────────────────────────────────────────
+// ── Diagnostics ────────────────────────────────────────────────
+// Reaches out to the chain RPC, so it is for humans and dashboards — not for a
+// keep-warm ping. Use /healthz for that.
 app.get('/health', async (req, res) => {
   const network = await contractManager.getNetworkInfo?.()
   res.json({

@@ -4,6 +4,8 @@ import prisma from '../lib/prisma.js'
 import agentService from './agentService.js'
 import contractManager from '../blockchain/contracts.js'
 import config from '../config/config.js'
+import { accessDeniedMessage, getAgentAccessState } from './accessService.js'
+import { learnFromResult } from './capabilitiesService.js'
 
 class OrchestratorService {
   constructor() {
@@ -35,13 +37,10 @@ class OrchestratorService {
 
     const agent = await this._loadAgent(agentId)
 
-    const hasAccess = await contractManager.hasAccess(
-      agent.contractAgentId,
-      callerWallet
-    )
+    const accessState = await getAgentAccessState(agent, callerWallet)
 
-    if (!hasAccess) {
-      throw this._err('Access not purchased for this agent', 403)
+    if (!accessState.hasAccess) {
+      throw this._err(accessDeniedMessage(accessState), 403)
     }
 
     if (agent.status === 'active') {
@@ -111,6 +110,12 @@ class OrchestratorService {
     }).catch(() => {})
 
     this._releaseChain(callChainId, agentId)
+
+    // Same idea as the streaming path: learn this agent's result shape once the run
+    // itself is done, without letting it delay or break the response.
+    learnFromResult(agent, response).catch((err) =>
+      console.error('[ORCHESTRATOR] capability inference failed:', err.message),
+    )
 
     this.stats.successfulExecutions++
     if (callDepth > 0) this.stats.agentToAgentCalls++
