@@ -3,11 +3,6 @@ import { v4 as uuidv4 } from 'uuid'
 import axios from 'axios'
 import config from '../config/config.js'
 
-function prismaSupportsAgentField(fieldName) {
-  const model = prisma?._runtimeDataModel?.models?.Agent
-  if (!model || !Array.isArray(model.fields)) return true
-  return model.fields.some((field) => field?.name === fieldName)
-}
 
 function buildAgentLookup(id) {
   const value = String(id || '').trim()
@@ -230,6 +225,7 @@ class AgentService {
       'tags',
       'mcpSchema',
       'executionConfig',
+      'capabilities',
       'category',
       'pricing',
       'lifetimeMultiplier',

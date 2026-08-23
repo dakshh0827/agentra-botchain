@@ -141,6 +141,10 @@ model Agent {
 
   mcpSchema       Json?
   executionConfig Json?
+  capabilities    Json?
+  // Derived from what the agent actually returned on its last run. Only consulted
+  // when `capabilities` is null — a declaration always outranks a guess.
+  inferredCapabilities Json?
   isVerified      Boolean       @default(false)
  
   isOfficial      Boolean       @default(false)
@@ -330,6 +334,9 @@ model Interaction {
   @@index([agentId])
   @@index([callerWallet])
   @@index([agentId, createdAt])
+  // Free-tier quota counts successful runs per wallet per agent on every access
+  // check that reaches the trial branch.
+  @@index([agentId, callerWallet, status])
 }
 
 //////////////////////////////////////////////////

@@ -10,6 +10,7 @@ import {
   updateAgent,
   deleteAgent,
   validateEndpoint,
+  refreshCapabilities,
   searchAgents,
   purchaseAccess,
   upvoteAgent,
@@ -18,7 +19,7 @@ import {
 } from '../controllers/agentController.js'
 
 import { authMiddleware, optionalAuth } from '../middlewares/auth.js'
-import { deployLimiter } from '../middlewares/rateLimiter.js'
+import { deployLimiter, executionLimiter } from '../middlewares/rateLimiter.js'
 
 import { getAgentMetrics } from '../controllers/analyticsController.js'
 import { getReviews, createReview } from '../controllers/reviewController.js'
@@ -50,11 +51,15 @@ router.get('/comms-target', authMiddleware, getCommsTarget)
 // Any agent exposing POST /chat gets durable per-wallet history from these three; the
 // agent stays stateless and the thread survives its restarts.
 router.get('/conversations', authMiddleware, getMyConversations)
-router.post('/:agentId/chat', authMiddleware, chatWithAgent)
+// executionLimiter, not the global apiLimiter: every one of these proxies out to the
+// agent's own endpoint, burns the owner's LLM budget, and holds a socket. Sharing one
+// limiter instance with /execute caps total agent-endpoint calls per wallet rather
+// than handing out a separate budget per route.
+router.post('/:agentId/chat', authMiddleware, executionLimiter, chatWithAgent)
 // SSE. Separate from /execute because the orchestrator cannot consume a stream —
 // see controllers/streamController.js for why it is not taught to.
-router.post('/:agentId/execute/stream', authMiddleware, executeStream)
-router.post('/:agentId/chat/stream', authMiddleware, chatStream)
+router.post('/:agentId/execute/stream', authMiddleware, executionLimiter, executeStream)
+router.post('/:agentId/chat/stream', authMiddleware, executionLimiter, chatStream)
 router.get('/:agentId/conversation', authMiddleware, getAgentConversation)
 router.delete('/:agentId/conversation', authMiddleware, deleteAgentConversation)
 
@@ -68,8 +73,11 @@ router.get('/:agentId/manifest', optionalAuth, getAgentManifest)
 // Deploy agent (creates draft first)
 router.post('/deploy', authMiddleware, deployLimiter, deployAgent)
 
-// Other protected routes before /:id to avoid conflicts
+
 router.post('/validate-endpoint', authMiddleware, validateEndpoint)
+
+// Owner re-probes their agent's /capabilities after redeploying it
+router.post('/:agentId/capabilities/refresh', authMiddleware, refreshCapabilities)
 router.post('/:fromId/call-agent', authMiddleware, upload.any(), callAgent)
 router.get('/:agentId/messages', authMiddleware, getMessages)
 

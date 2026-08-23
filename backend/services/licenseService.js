@@ -1,7 +1,7 @@
 import { SignJWT } from 'jose'
 import prisma from '../lib/prisma.js'
 import { getPlatformPrivateKey } from '../config/keys.js'
-import { getAgentAccessState } from './accessService.js'
+import { getAgentAccessState, UNPAID_ACCESS_REASONS } from './accessService.js'
 
 const LIFETIME_EXPIRY = new Date('2099-01-01T00:00:00.000Z')
 
@@ -24,6 +24,12 @@ export async function issueLicenseKey(agentId, wallet) {
   }
 
   const accessState = await getAgentAccessState(agent, wallet)
+  if (UNPAID_ACCESS_REASONS.has(accessState.reason)) {
+    const err = new Error('Free access does not include a license key — purchase this agent to run it locally')
+    err.status = 403
+    throw err
+  }
+
   const isLifetime = Boolean(
     accessState.access?.isLifetime || accessState.purchase?.isLifetime || accessState.reason === 'owner' || accessState.reason === 'on-chain'
   )

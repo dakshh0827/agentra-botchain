@@ -1,10 +1,9 @@
 import axios from 'axios'
-import { z } from 'zod'
 
 import prisma from '../lib/prisma.js'
 import config from '../config/config.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
-import { hasPersistentAgentAccess } from '../services/accessService.js'
+import { accessDeniedMessage, getAgentAccessState } from '../services/accessService.js'
 import { assertSafeUrl } from '../utils/ssrfGuard.js'
 import {
   appendExchange,
@@ -12,6 +11,7 @@ import {
   getConversation,
   listConversations,
 } from '../services/conversationService.js'
+import { chatMessageSchema } from '../schemas/chatSchema.js'
 
 
 function buildAgentLookup(id) {
@@ -22,25 +22,21 @@ function buildAgentLookup(id) {
 }
 
 
-//chat validation
-const chatSchema = z.object({
-  question: z.string().min(1).max(2000),
-  reportId: z.string().max(120).optional(),
-})
-
 
 const CHAT_TIMEOUT_MS = 60_000
 
 const chatWithAgent = asyncHandler(async (req, res) => {
-  const { question, reportId } = chatSchema.parse(req.body)
+  const { question, reportId } = chatMessageSchema.parse(req.body)
   const callerWallet = req.walletAddress
 
   const agent = await prisma.agent.findFirst({ where: buildAgentLookup(req.params.agentId) })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
 
     //chekc this agent is purchased y user ot not ..handle permssison 
-  const allowed = await hasPersistentAgentAccess(agent, callerWallet)
-  if (!allowed) return res.status(403).json({ error: 'Access not purchased' })
+  const accessState = await getAgentAccessState(agent, callerWallet)
+  if (!accessState.hasAccess) {
+    return res.status(403).json({ error: accessDeniedMessage(accessState), freeRuns: accessState.freeRuns || null })
+  }
 
   if (!agent.endpoint) {
     return res.status(400).json({ error: `Agent "${agent.name}" has no endpoint configured` })

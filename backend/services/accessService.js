@@ -1,8 +1,19 @@
 import prisma from '../lib/prisma.js'
 import contractManager from '../lib/contractManager.js'
+import config from '../config/config.js'
+
+
+export const UNPAID_ACCESS_REASONS = new Set(['open-access', 'free-tier'])
 
 function normalizeWallet(walletAddress) {
   return String(walletAddress || '').trim().toLowerCase()
+}
+
+//free runs used by user for agents
+async function usedFreeRuns(agentId, wallet) {
+  return prisma.interaction.count({
+    where: { agentId, callerWallet: wallet, status: 'success' },
+  })
 }
 
 export async function recordAgentPurchase({ agent, walletAddress, txHash, isLifetime = false, expiresAt = null }) {
@@ -65,6 +76,11 @@ export async function getAgentAccessState(agent, walletAddress) {
 
   const normalizedWallet = normalizeWallet(walletAddress)
 
+ 
+  if (config.freeTier.openAccess) {
+    return { hasAccess: true, reason: 'open-access' }
+  }
+
   if (normalizeWallet(agent.ownerWallet) === normalizedWallet) {
     return { hasAccess: true, reason: 'owner' }
   }
@@ -102,10 +118,51 @@ export async function getAgentAccessState(agent, walletAddress) {
     }
   }
 
+  const allowance = config.freeTier.runsPerAgent
+  if (allowance > 0) {
+    const used = await usedFreeRuns(agent.agentId, normalizedWallet)
+    if (used < allowance) {
+      return {
+        hasAccess: true,
+        reason: 'free-tier',
+        freeRuns: { used, allowance, remaining: allowance - used },
+      }
+    }
+    return {
+      hasAccess: false,
+      reason: 'free-tier-exhausted',
+      freeRuns: { used, allowance, remaining: 0 },
+    }
+  }
+
   return { hasAccess: false, reason: null }
 }
 
 export async function hasPersistentAgentAccess(agent, walletAddress) {
   const state = await getAgentAccessState(agent, walletAddress)
   return state.hasAccess
+}
+
+
+export function accessDeniedMessage(state) {
+  if (state?.reason === 'free-tier-exhausted') {
+    const { used, allowance } = state.freeRuns || {}
+    // A purchased-then-lapsed wallet can sit above the allowance; showing "7/3" reads
+    // like a bug rather than an exhausted trial.
+    const spent = Math.min(used ?? 0, allowance ?? 0)
+    return `Free trial used up (${spent}/${allowance} runs) — purchase this agent to keep going`
+  }
+  return 'Access not purchased for this agent'
+}
+
+
+export async function requireAgentAccess(agent, walletAddress) {
+  const state = await getAgentAccessState(agent, walletAddress)
+  if (!state.hasAccess) {
+    const err = new Error(accessDeniedMessage(state))
+    err.status = 403
+    err.accessState = state
+    throw err
+  }
+  return state
 }

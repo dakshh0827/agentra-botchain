@@ -1,12 +1,14 @@
 import axios from 'axios'
-import { z } from 'zod'
 
 import prisma from '../lib/prisma.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
-import { hasPersistentAgentAccess } from '../services/accessService.js'
+import { accessDeniedMessage, getAgentAccessState } from '../services/accessService.js'
+import { learnFromResult } from '../services/capabilitiesService.js'
 import { assertSafeUrl } from '../utils/ssrfGuard.js'
 import { appendExchange, getConversation } from '../services/conversationService.js'
 import agentService from '../services/agentService.js'
+import { executeStreamSchema } from '../schemas/streamSchema.js'
+import { chatMessageSchema } from '../schemas/chatSchema.js'
 
 
 
@@ -18,16 +20,6 @@ function buildAgentLookup(id) {
 }
 
 const STREAM_TIMEOUT_MS = 180_000
-
-const executeSchema = z.object({
-  task: z.string().min(1).max(4000),
-  maxPages: z.number().int().min(1).max(50).optional(),
-})
-
-const chatSchema = z.object({
-  question: z.string().min(1).max(2000),
-  reportId: z.string().max(120).optional(),
-})
 
 // Open the response as event stream 
 function openStream(res) {
@@ -89,8 +81,9 @@ async function loadAgentForCaller(req, res) {
     res.status(404).json({ error: 'Agent not found' })
     return null
   }
-  if (!(await hasPersistentAgentAccess(agent, req.walletAddress))) {
-    res.status(403).json({ error: 'Access not purchased' })
+  const accessState = await getAgentAccessState(agent, req.walletAddress)
+  if (!accessState.hasAccess) {
+    res.status(403).json({ error: accessDeniedMessage(accessState), freeRuns: accessState.freeRuns || null })
     return null
   }
   if (!agent.endpoint) {
@@ -101,7 +94,7 @@ async function loadAgentForCaller(req, res) {
 }
 
 const executeStream = asyncHandler(async (req, res) => {
-  const { task, maxPages } = executeSchema.parse(req.body)
+  const { task, maxPages } = executeStreamSchema.parse(req.body)
   const agent = await loadAgentForCaller(req, res)
   if (!agent) return
 
@@ -163,11 +156,19 @@ const executeStream = asyncHandler(async (req, res) => {
     console.error('[STREAM] bookkeeping failed:', err.message)
   }
 
+  // The caller already has their result; teaching the marketplace what this agent
+  // returns is bookkeeping, so it runs last and its failure is nobody's problem.
+  if (result) {
+    learnFromResult(agent, result).catch((err) =>
+      console.error('[STREAM] capability inference failed:', err.message),
+    )
+  }
+
   res.end()
 })
 
 const chatStream = asyncHandler(async (req, res) => {
-  const { question, reportId } = chatSchema.parse(req.body)
+  const { question, reportId } = chatMessageSchema.parse(req.body)
   const agent = await loadAgentForCaller(req, res)
   if (!agent) return
 

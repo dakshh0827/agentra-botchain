@@ -1,44 +1,14 @@
 import orchestrator from '../orchestrator/orchestrator.js'
 import prisma from '../lib/prisma.js'
-import { hasPersistentAgentAccess } from '../services/accessService.js'
+import { accessDeniedMessage, getAgentAccessState, hasPersistentAgentAccess } from '../services/accessService.js'
 import config from '../config/config.js'
 import { asyncHandler } from '../middlewares/errorHandler.js'
-import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import { validateRuntimePayload } from '../utils/validateRuntimePayloadAgainstExecutionConfig.js'
 
 import { buildExecutionRequest } from '../utils/buildExecutionRequest.js'
 import { assertSafeUrl } from '../utils/ssrfGuard.js'
-
-const executeSchema = z.object({
-  task: z.string().max(10000).optional().default(''),
-
-  runtimePayload: z
-    .object({
-      headers: z
-        .record(z.string(), z.string())
-        .optional()
-        .default({}),
-
-      body: z
-        .record(z.string(), z.unknown())
-        .optional()
-        .default({}),
-
-      contentType: z.string().optional(),
-
-      method: z.string().optional(),
-    })
-    .optional(),
-})
-
-const composeSchema = z.object({
-  agents: z.array(z.object({
-    agentId: z.union([z.string(), z.number()]).transform((v) => String(v)),
-    task: z.string().min(1),
-  })).min(2).max(5),
-  sequential: z.boolean().optional(),
-})
+import { executeSchema, composeSchema } from '../schemas/executionSchema.js'
 
 function buildAgentLookup(id) {
   const value = String(id || '').trim()
@@ -83,10 +53,11 @@ const executeAgent = asyncHandler(async (req, res) => {
     })
   }
 
-  const hasAccess = await hasPersistentAgentAccess(agent, callerWallet)
-  if (!hasAccess) {
+  const accessState = await getAgentAccessState(agent, callerWallet)
+  if (!accessState.hasAccess) {
     return res.status(403).json({
-      error: 'Access not purchased',
+      error: accessDeniedMessage(accessState),
+      freeRuns: accessState.freeRuns || null,
     })
   }
 
