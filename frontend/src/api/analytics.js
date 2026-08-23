@@ -1,4 +1,5 @@
 import api from './axios'
+import { EXPLORER_CACHE_TTL_MS, ttlCached } from '../utils/ttlCache'
 
 export const analyticsAPI = {
   getLeaderboard: (params) =>
@@ -25,7 +26,23 @@ export const analyticsAPI = {
       },
     }),
 
-  getGlobalStats: () => api.get('/analytics/global'),
+  // Explorer / TopBar / Landing all hit this — 30s cache avoids refetch on every navigate.
+  getGlobalStats: async () => {
+    try {
+      const data = await ttlCached(
+        'analytics:global',
+        async () => {
+          const res = await api.get('/analytics/global')
+          return res?.data ?? null
+        },
+        EXPLORER_CACHE_TTL_MS,
+      )
+      return { data }
+    } catch (err) {
+      // Don't leave callers unhandled — TopBar/Explorer expect .then/.catch.
+      throw err
+    }
+  },
 
   getLeaderboardStats: () => api.get('/leaderboard/stats'),
 

@@ -1,16 +1,5 @@
 name: Keep backend warm
 
-# Render's free tier sleeps a web service after ~15 minutes of no traffic, and the
-# next visitor pays a 30-60s cold start. This pings the liveness probe often enough
-# that the instance never gets to sleep.
-#
-# Needs a repository variable with the deployed origin (Settings -> Secrets and
-# variables -> Actions -> Variables):
-#   BACKEND_URL = https://agentra-0g.onrender.com
-# BACKEND is accepted as an alias; a trailing slash is fine. Without one of them the
-# job skips instead of failing every ten minutes.
-#
-# Scheduled workflows only run from the repository's DEFAULT branch.
 
 
 on:

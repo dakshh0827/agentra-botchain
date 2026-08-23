@@ -11,6 +11,7 @@ import { useAgents } from '../hooks/useAgents'
 import { useMarketplaceStore } from '../stores/marketplaceStore'
 import { analyticsAPI } from '../api/analytics'
 import { getAgentExternalId } from '../utils/helpers'
+import { ttlGet, ttlHas } from '../utils/ttlCache'
 import {
   detailsBtnClass,
   tryBtnClass,
@@ -33,17 +34,29 @@ export default function Explorer() {
   const { agents, isLoading } = useAgents()
   const { filters, search, setFilter, setSearch } = useMarketplaceStore()
   const { isConnected } = useAccount()
-  const [stats, setStats] = useState(null)
-  const [statsLoading, setStatsLoading] = useState(true)
+  const cachedStats = ttlHas('analytics:global') ? ttlGet('analytics:global') : undefined
+  const [stats, setStats] = useState(() =>
+    cachedStats !== undefined ? cachedStats : null,
+  )
+  const [statsLoading, setStatsLoading] = useState(() => cachedStats === undefined)
   const [searchInput, setSearchInput] = useState(search)
   const [tryAgent, setTryAgent] = useState(null)
 
   useEffect(() => {
-    setStatsLoading(true)
-    analyticsAPI.getGlobalStats()
-      .then((r) => setStats(r.data))
+    let cancelled = false
+    if (!ttlHas('analytics:global')) setStatsLoading(true)
+    analyticsAPI
+      .getGlobalStats()
+      .then((r) => {
+        if (!cancelled) setStats(r?.data ?? null)
+      })
       .catch(() => {})
-      .finally(() => setStatsLoading(false))
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -54,29 +67,33 @@ export default function Explorer() {
   const list = useMemo(() => (Array.isArray(agents) ? agents : []), [agents])
 
   const filteredAgents = useMemo(() => {
+    const q = String(search || '').toLowerCase()
+    const category = filters?.category || 'all'
+    const sortBy = filters?.sortBy || 'computations'
+
     return list
       .filter((a) => {
-        const q = search.toLowerCase()
+        if (!a || typeof a !== 'object') return false
         const matchSearch =
-          !search ||
-          a.name?.toLowerCase().includes(q) ||
-          a.description?.toLowerCase().includes(q) ||
-          (a.tags || []).some((t) => t.toLowerCase().includes(q))
+          !q ||
+          String(a.name || '').toLowerCase().includes(q) ||
+          String(a.description || '').toLowerCase().includes(q) ||
+          (Array.isArray(a.tags) ? a.tags : []).some((t) =>
+            String(t || '').toLowerCase().includes(q),
+          )
 
-        const matchCat = !filters.category || filters.category === 'all' || a.category === filters.category
-        // First-party agents have their own shelf above this grid. Leaving them in as
-        // well put the same card on screen twice, which reads as a duplicate record
-        // rather than as a feature.
+        const matchCat = category === 'all' || a.category === category
         return matchSearch && matchCat && !a.isOfficial
       })
       .sort((a, b) => {
-        // FIXED: Mapped the new technical sort values to your actual data fields
-        if (filters.sortBy === 'computations') return (b.calls || 0) - (a.calls || 0)
-        if (filters.sortBy === 'uptime') return (b.score || 0) - (a.score || 0) // Proxying score to represent uptime
-        if (filters.sortBy === 'newest') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
-        return (b.calls || 0) - (a.calls || 0) // Default sort
+        if (sortBy === 'computations') return (b.calls || 0) - (a.calls || 0)
+        if (sortBy === 'uptime') return (b.score || 0) - (a.score || 0)
+        if (sortBy === 'newest') {
+          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+        }
+        return (b.calls || 0) - (a.calls || 0)
       })
-  }, [filters.category, filters.sortBy, list, search])
+  }, [filters?.category, filters?.sortBy, list, search])
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-bg text-text-primary px-4 sm:px-6 lg:px-8 py-7">

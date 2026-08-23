@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi'
 import { BadgeCheck, LayoutGrid, ArrowUpRight } from 'lucide-react'
 import { agentsAPI } from '../../api/agents'
 import { getAgentExternalId } from '../../utils/helpers'
+import { EXPLORER_CACHE_TTL_MS, ttlCached, ttlGet, ttlHas } from '../../utils/ttlCache'
 import {
   detailsBtnClass,
   tryBtnClass,
@@ -133,16 +134,28 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
  */
 export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
   const { isConnected } = useAccount()
-  const [agents, setAgents] = useState([])
-  const [isLoading, setLoading] = useState(true)
+  const cacheKey = `agents:official:${limit}`
+  const hasCache = ttlHas(cacheKey)
+  const [agents, setAgents] = useState(() => {
+    if (!hasCache) return []
+    const cached = ttlGet(cacheKey)
+    return Array.isArray(cached) ? cached : []
+  })
+  const [isLoading, setLoading] = useState(() => !hasCache)
   const [tryAgent, setTryAgent] = useState(null)
 
   useEffect(() => {
     let active = true
-    agentsAPI
-      .getOfficial(limit)
-      .then((res) => {
-        if (active) setAgents(res.data?.agents || [])
+    ttlCached(
+      cacheKey,
+      async () => {
+        const res = await agentsAPI.getOfficial(limit)
+        return res.data?.agents || []
+      },
+      EXPLORER_CACHE_TTL_MS,
+    )
+      .then((list) => {
+        if (active) setAgents(list)
       })
       .catch(() => {
         if (active) setAgents([])
@@ -153,7 +166,7 @@ export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
     return () => {
       active = false
     }
-  }, [limit])
+  }, [cacheKey, limit])
 
   if (isLoading || !agents.length) return null
 

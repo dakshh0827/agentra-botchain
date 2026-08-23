@@ -3,39 +3,45 @@ import { useAccount, useSwitchChain } from 'wagmi'
 import { SUPPORTED_CHAINS } from '../../config/chains.config'
 import NeonButton from '../ui/NeonButton'
 
+/**
+ * Soft gate: keep the app visible, overlay a switch prompt when the wallet
+ * is on an unsupported chain. Replacing `children` entirely made the light
+ * theme look like a blank page (white text on cream).
+ */
 export default function NetworkEnforcer({ children }) {
   const { chain, isConnected } = useAccount()
   const { switchChain, isPending } = useSwitchChain()
 
-  const isUnsupported = isConnected && chain && !SUPPORTED_CHAINS.find(c => c.id === chain.id)
-
-  if (!isUnsupported) return children
-
+  const isUnsupported = isConnected && chain && !SUPPORTED_CHAINS.find((c) => c.id === chain.id)
   const targetChain = SUPPORTED_CHAINS[0]
 
-  if (!targetChain) return children
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-bg)]/90 backdrop-blur-md">
-      <div className="glass-panel p-8 max-w-md w-full border border-red-500/30 flex flex-col items-center text-center">
-        <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center mb-4 border border-red-500/50">
-          <span className="text-red-400 text-xl font-bold">!</span>
+    <>
+      {children}
+      {isUnsupported && targetChain ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-md px-4">
+          <div className="rounded-2xl border border-border bg-panel p-8 max-w-md w-full shadow-lg flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center mb-4 border border-red-500/40">
+              <span className="text-red-600 text-xl font-bold">!</span>
+            </div>
+            <h2 className="text-xl font-display font-bold text-text-primary mb-2">
+              Unsupported Network
+            </h2>
+            <p className="text-text-secondary text-sm mb-6">
+              Your wallet is on an unsupported chain. Switch to{' '}
+              <span className="font-semibold text-text-primary">{targetChain.name}</span>{' '}
+              to keep using Agentra.
+            </p>
+            <NeonButton
+              onClick={() => switchChain({ chainId: targetChain.id })}
+              loading={isPending}
+              className="w-full justify-center"
+            >
+              Switch to {targetChain.name}
+            </NeonButton>
+          </div>
         </div>
-        <h2 className="text-xl font-display text-white mb-2">Unsupported Network</h2>
-        <p className="text-[var(--color-text-secondary)] text-sm mb-6 font-mono">
-          Your wallet is connected to an unsupported chain. Please switch to Zero Gravity Chain to continue.
-        </p>
-        <div className="flex flex-col gap-3 w-full">
-          <NeonButton
-            onClick={() => switchChain({ chainId: targetChain.id })}
-            loading={isPending}
-          >
-            SWITCH TO {targetChain.name.toUpperCase()}
-          </NeonButton>
-        </div>
-      </div>
-    </div>
+      ) : null}
+    </>
   )
 }
-
-

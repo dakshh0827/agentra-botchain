@@ -1,28 +1,52 @@
 import { useEffect } from 'react'
 import { useAgentStore } from '../stores/agentStore'
 import { agentsAPI } from '../api/agents'
+import { EXPLORER_CACHE_TTL_MS, ttlCached } from '../utils/ttlCache'
 
 export function useAgents(params = {}) {
   const { setAgents, setLoading, setError, agents, isLoading, error } = useAgentStore()
 
   useEffect(() => {
+    let cancelled = false
+    const cacheKey = `agents:list:${JSON.stringify(params)}`
+
     const fetchAgents = async () => {
-      setLoading(true)
+      // Keep showing prior list while we decide — only spin if we have nothing.
+      if (!useAgentStore.getState().agents?.length) {
+        setLoading(true)
+      }
       try {
-        const res = await agentsAPI.getAll(params)
-        // Backend returns { agents: [...], total, page, pages, limit }
-        const agentsData = res?.data?.agents || res?.data || []
-        setAgents(Array.isArray(agentsData) ? agentsData : [])
+        const agentsData = await ttlCached(
+          cacheKey,
+          async () => {
+            const res = await agentsAPI.getAll(params)
+            const list = res?.data?.agents || res?.data || []
+            return Array.isArray(list) ? list : []
+          },
+          EXPLORER_CACHE_TTL_MS,
+        )
+        if (!cancelled) {
+          setAgents(agentsData)
+          setError(null)
+        }
       } catch (err) {
         console.error('useAgents error:', err)
-        setError(err?.response?.data?.error || err.message)
-        setAgents(MOCK_AGENTS)
+        if (!cancelled) {
+          setError(err?.response?.data?.error || err.message)
+          // Only fall back to mocks when the store is empty.
+          if (!useAgentStore.getState().agents?.length) {
+            setAgents(MOCK_AGENTS)
+          }
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchAgents()
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(params)])
 
