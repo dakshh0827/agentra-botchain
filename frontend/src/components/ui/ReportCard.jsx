@@ -1,13 +1,7 @@
 import React from 'react'
-import { FileText, FileSpreadsheet, FileDown, Table2, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 
-
-const FORMATS = [
-  { key: 'reportUrl', label: 'Report', hint: 'HTML', icon: FileText },
-  { key: 'pdfUrl', label: 'PDF', hint: 'Print', icon: FileDown },
-  { key: 'excelUrl', label: 'Excel', hint: '.xlsx', icon: FileSpreadsheet },
-  { key: 'csvUrl', label: 'Sheets', hint: '.csv', icon: Table2 },
-]
+import { capabilitiesFor, readReport } from '../../utils/agentCapabilities'
 
 function scoreTone(score) {
   if (score >= 90) return { text: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' }
@@ -16,54 +10,83 @@ function scoreTone(score) {
   return { text: '#B91C1C', bg: '#FEF2F2', border: '#FECACA' }
 }
 
-export default function ReportCard({ report }) {
+/**
+ * Renders whatever result shape the agent declared. Which field holds the score, the
+ * title, or the download links is read from the agent's capability contract rather
+ * than assumed, so a new agent gets a real card instead of a blank one.
+ */
+export default function ReportCard({ report, agent }) {
   if (!report?.reportId) return null
 
-  const score = Number(report.overall ?? 0)
-  const tone = scoreTone(score)
-  const counts = report.counts || {}
-  const links = FORMATS.filter((f) => report[f.key])
+  const caps = capabilitiesFor(agent)
+  const view = readReport(report, caps.report)
+  if (!view) return null
+
+  const hasScore = Number.isFinite(view.score)
+  const tone = scoreTone(hasScore ? view.score : 0)
+  const counts = view.counts || {}
+  const links = caps.deliverables.filter((d) => report[d.key])
+
+  // Counts are agent-defined, so they are labelled from their own keys rather than
+  // from a fixed critical/warning vocabulary.
+  // An agent can name the keys worth showing; otherwise fall back to every non-zero
+  // one, which is the best guess available when it has told us nothing.
+  const countEntries = view.countsInclude
+    ? view.countsInclude.map((k) => [k, counts[k]])
+    : Object.entries(counts)
+  const countBits = countEntries
+    .filter(([, v]) => typeof v === 'number' && v > 0)
+    .slice(0, 4)
+    .map(([k, v]) => `${v} ${k}`)
+
+  const subtitleBits = [
+    view.subtitle !== undefined && view.subtitle !== null && view.subtitle !== ''
+      ? `${view.subtitle}${view.subtitleLabel ? ` ${view.subtitleLabel}` : ''}`
+      : null,
+    ...countBits,
+  ].filter(Boolean)
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-card)] overflow-hidden">
       <div className="flex items-center gap-4 px-4 py-4 border-b border-[var(--color-border)]">
-        <div
-          className="w-16 h-16 rounded-xl flex flex-col items-center justify-center shrink-0 border"
-          style={{ background: tone.bg, borderColor: tone.border }}
-        >
-          <span className="text-xl font-bold leading-none" style={{ color: tone.text }}>
-            {score}
-          </span>
-          <span className="text-[9px] text-[var(--color-text-dim)] mt-0.5">/ 100</span>
-        </div>
+        {hasScore && (
+          <div
+            className="w-16 h-16 rounded-xl flex flex-col items-center justify-center shrink-0 border"
+            style={{ background: tone.bg, borderColor: tone.border }}
+          >
+            <span className="text-xl font-bold leading-none" style={{ color: tone.text }}>
+              {view.score}
+            </span>
+            <span className="text-[9px] text-[var(--color-text-dim)] mt-0.5">/ {view.scoreMax}</span>
+          </div>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-sm text-[var(--color-text-primary)] truncate">
-              {report.host}
+              {view.title || 'Result'}
             </span>
             {report.grade && (
               <span
                 className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
                 style={{ color: tone.text, background: tone.bg, borderColor: tone.border }}
               >
-                {report.grade} · {report.label}
+                {report.grade}{report.label ? ` · ${report.label}` : ''}
               </span>
             )}
           </div>
-          <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
-            {report.pagesCrawled} page(s) crawled
-            {counts.critical ? ` · ${counts.critical} critical` : ''}
-            {counts.warnings ? ` · ${counts.warnings} warning(s)` : ''}
-          </p>
+          {subtitleBits.length > 0 && (
+            <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
+              {subtitleBits.join(' · ')}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Every finding is a measurement, so the categories can be shown as-is. */}
-      {Array.isArray(report.categories) && report.categories.length > 0 && (
+      {view.categories && view.categories.length > 0 && (
         <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-3 gap-2 border-b border-[var(--color-border)]">
-          {report.categories.map((c) => {
-            const t = scoreTone(c.score)
+          {view.categories.map((c) => {
+            const t = scoreTone(Number(c.score))
             return (
               <div key={c.name} className="rounded-lg border border-[var(--color-border)] px-2.5 py-2">
                 <div className="text-[10px] text-[var(--color-text-dim)] truncate">{c.name}</div>
@@ -74,29 +97,31 @@ export default function ReportCard({ report }) {
         </div>
       )}
 
-      <div className="px-4 py-3 flex flex-wrap gap-2">
-        {links.map(({ key, label, hint, icon: Icon }) => (
-          <a
-            key={key}
-            href={report[key]}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg
-                       border border-[#d9c2f2] bg-[var(--color-accent-pink)] text-[var(--color-primary-deep)]
-                       hover:border-primary transition-colors whitespace-nowrap"
-          >
-            <Icon size={13} />
-            {label}
-            <span className="text-[10px] font-normal opacity-70">{hint}</span>
-            <ExternalLink size={10} className="opacity-60" />
-          </a>
-        ))}
-      </div>
+      {links.length > 0 && (
+        <div className="px-4 py-3 flex flex-wrap gap-2">
+          {links.map(({ key, label, hint, Icon }) => (
+            <a
+              key={key}
+              href={report[key]}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg
+                         border border-[#d9c2f2] bg-[var(--color-accent-pink)] text-[var(--color-primary-deep)]
+                         hover:border-primary transition-colors whitespace-nowrap"
+            >
+              <Icon size={13} />
+              {label}
+              {hint && <span className="text-[10px] font-normal opacity-70">{hint}</span>}
+              <ExternalLink size={10} className="opacity-60" />
+            </a>
+          ))}
+        </div>
+      )}
 
-      {/* The audit's own verdict on itself, when it failed one of its checks. */}
-      {Array.isArray(report.selfCheckFailed) && report.selfCheckFailed.length > 0 && (
+      {/* The run's own verdict on itself, when it failed one of its checks. */}
+      {view.hasNotice && (
         <p className="px-4 pb-3 text-[11px] text-[var(--color-warning)]">
-          This run did not pass its own consistency checks — treat the score as provisional.
+          {view.notice || 'This run did not pass its own consistency checks — treat the result as provisional.'}
         </p>
       )}
     </div>

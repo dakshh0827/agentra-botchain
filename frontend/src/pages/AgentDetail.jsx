@@ -372,6 +372,10 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
   const yearlyEth = parseFloat(formatUnits(requiredWei.yearly ?? 0n, 18)).toFixed(6)
 
   const handlePurchase = async () => {
+    if (agent.contractAgentId == null) {
+      setError('This agent is not registered on-chain yet — purchase is unavailable until deploy is confirmed.')
+      return
+    }
     if (!contracts?.Agentra) { setError('Smart contracts not found for current network'); return }
     if (!publicClient) { setError('Wallet client unavailable'); return }
 
@@ -381,6 +385,10 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
     try {
       const isYearly = purchaseType === 'yearly'
       const baseWei = isYearly ? requiredWei.yearly : requiredWei.monthly
+      if (!baseWei || baseWei === 0n) {
+        setError('On-chain price could not be loaded for this agent.')
+        return
+      }
       const buffered = baseWei + (baseWei * 2n) / 100n
       const period = isYearly ? 1 : 0
 
@@ -408,6 +416,8 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
     }
   }
 
+  const notOnChain = agent.contractAgentId == null
+
   return <PurchasePanelUI
     purchaseType={purchaseType}
     setPurchaseType={setPurchaseType}
@@ -416,8 +426,9 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
     onPurchase={handlePurchase}
     isPurchasing={isPurchasing}
     pendingTx={pendingTx}
-    error={error}
+    error={error || (notOnChain ? 'Agent not registered on-chain — confirm deploy first (missing contractAgentId).' : '')}
     currency="0G"
+    purchaseDisabled={notOnChain}
   />
 }
 
@@ -526,8 +537,9 @@ function BlockchainPurchasePanel({ agent, onSuccess, pendingTx }) {
   />
 }
 
-function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth, onPurchase, isPurchasing, error, pendingTx }) {
+function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth, onPurchase, isPurchasing, error, pendingTx, purchaseDisabled = false }) {
   const { isConnected } = useAccount()
+  const cannotBuy = !isConnected || purchaseDisabled
   return (
     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center text-center py-6">
       <div className="w-16 h-16 rounded-2xl bg-[rgba(124,58,237,0.1)] border border-[rgba(124,58,237,0.25)] flex items-center justify-center mb-6">
@@ -570,8 +582,14 @@ function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth,
         ))}
       </div>
       {error && <div className="flex items-center gap-2 text-[var(--color-danger)] text-xs p-3 rounded-lg bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.2)] mb-4 w-full text-left"><AlertCircle size={13} className="shrink-0" /> {error}</div>}
-      <NeonButton icon={ShoppingCart} onClick={onPurchase} loading={isPurchasing} disabled={!isConnected} className="w-full justify-center">
-        {!isConnected ? 'CONNECT WALLET' : isPurchasing ? 'AWAITING WALLET...' : `PURCHASE ${purchaseType === 'monthly' ? 'MONTHLY' : 'YEARLY'} ACCESS`}
+      <NeonButton icon={ShoppingCart} onClick={onPurchase} loading={isPurchasing} disabled={cannotBuy} className="w-full justify-center">
+        {!isConnected
+          ? 'CONNECT WALLET'
+          : purchaseDisabled
+            ? 'ON-CHAIN DEPLOY REQUIRED'
+            : isPurchasing
+              ? 'AWAITING WALLET...'
+              : `PURCHASE ${purchaseType === 'monthly' ? 'MONTHLY' : 'YEARLY'} ACCESS`}
       </NeonButton>
     </motion.div>
   )
@@ -1001,6 +1019,8 @@ export default function AgentDetail() {
   const [toastMessage, setToastMessage] = useState(null)
   const [hasValidAccess, setHasValidAccess] = useState(false)
   const [accessLoading, setAccessLoading] = useState(false)
+  // Trial allowance from the backend, so the page can say how many runs are left
+  const [freeRuns, setFreeRuns] = useState(null)
   const [pendingTx, setPendingTx] = useState(null)
   const pollIntervalRef = useRef(null)
 
@@ -1090,6 +1110,7 @@ const accessGrantedForWallet = useRef(null)
       const granted = res.data?.hasAccess || false
       const stillSameWallet = address?.toLowerCase() === normalized
       if (stillSameWallet) {
+        setFreeRuns(res.data?.freeRuns || null)
         setHasValidAccess(granted)
         accessGrantedForWallet.current = granted ? normalized : null
         writeCachedAccess(agentData, normalized, granted)
@@ -1427,6 +1448,15 @@ console.log('========================================\n')
                               </span>
                             )}
                           </h2>
+
+                          {freeRuns && freeRuns.remaining > 0 && (
+                            <div className="mb-5 flex items-center gap-2 px-3 py-2 rounded-xl border border-[rgba(124,58,237,0.25)] bg-[rgba(124,58,237,0.06)]">
+                              <Sparkles size={13} className="text-[var(--color-primary)] shrink-0" />
+                              <span className="text-xs font-mono text-[var(--color-text-secondary)]">
+                                Free trial — <span className="text-[var(--color-primary)] font-bold">{freeRuns.remaining}</span> of {freeRuns.allowance} run(s) left. Purchase to keep going after that.
+                              </span>
+                            </div>
+                          )}
 
                           {execConfig ? (
                             /* Stage 3: Dynamic schema-driven execution UI */

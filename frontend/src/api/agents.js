@@ -151,6 +151,11 @@ deploy: (data) =>
   validateEndpoint: (endpoint) =>
     api.post('/agents/validate-endpoint', { endpoint }),
 
+  // Owner-only: re-ask a deployed agent what it can do, after redeploying it with a
+  // changed /capabilities response.
+  refreshCapabilities: (id, capabilities) =>
+    api.post(`/agents/${id}/capabilities/refresh`, capabilities ? { capabilities } : {}),
+
   getPendingTransactions: () =>
     api.get('/transactions/pending'),
 }
