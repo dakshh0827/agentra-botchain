@@ -1,10 +1,8 @@
-name: Keep backend warm
-
-
+name: Keep services warm
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -14,32 +12,60 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Ping liveness probe
+      - name: Ping backend + agents
         env:
           BACKEND_URL: ${{ vars.BACKEND_URL || vars.BACKEND }}
+          SEO_URL: ${{ vars.SEO_AGENT_URL || 'https://agentra-seo.onrender.com' }}
+          RESEARCH_URL: ${{ vars.RESEARCH_AGENT_URL || 'https://agentra-research.onrender.com' }}
         run: |
-          if [ -z "$BACKEND_URL" ]; then
-            echo "Neither BACKEND_URL nor BACKEND repository variable is set — skipping."
-            exit 0
+          set -u
+          failed=0
+
+          ping_url() {
+            local label="$1"
+            local url="$2"
+            echo "::group::${label} → ${url}"
+            local code="000"
+            for attempt in 1 2 3; do
+              code=$(curl --silent --show-error --location \
+                          --max-time 90 --output /dev/null --write-out '%{http_code}' \
+                          "$url" || echo "000")
+              echo "attempt ${attempt}: HTTP ${code}"
+              if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+                echo "awake"
+                echo "::endgroup::"
+                return 0
+              fi
+              [ "$attempt" -lt 3 ] && sleep 12
+            done
+            echo "::warning::${label} did not answer 200 (last HTTP ${code})"
+            echo "::endgroup::"
+            return 1
+          }
+
+          if [ -z "${BACKEND_URL:-}" ]; then
+            echo "::warning::BACKEND_URL / BACKEND repo variable is not set — backend warm skipped."
+          else
+            base="${BACKEND_URL%/}"
+            # Liveness only — cheap.
+            ping_url "backend-healthz" "${base}/healthz" || failed=1
+            # Touches Mongo / real API path the Explorer uses.
+            ping_url "backend-analytics" "${base}/api/analytics/global" || failed=1
+            ping_url "backend-agents" "${base}/api/agents?limit=1&sortBy=newest" || failed=1
           fi
 
-          url="${BACKEND_URL%/}/healthz"
-          echo "Pinging $url"
-          for attempt in 1 2 3; do
-            code=$(curl --silent --show-error --location \
-                        --max-time 90 --output /dev/null --write-out '%{http_code}' \
-                        "$url" || echo "000")
+          # First-party agents sleep independently of the API.
+          if [ -n "${SEO_URL:-}" ]; then
+            ping_url "agentra-seo" "${SEO_URL%/}/health" || failed=1
+          fi
+          if [ -n "${RESEARCH_URL:-}" ]; then
+            ping_url "agentra-research" "${RESEARCH_URL%/}/health" || failed=1
+          fi
 
-            if [ "$code" = "200" ]; then
-              echo "Awake (HTTP $code) on attempt $attempt"
-              exit 0
-            fi
-
-            echo "Attempt $attempt returned HTTP $code"
-            [ "$attempt" -lt 3 ] && sleep 15
-          done
-
-          echo "::warning::Backend did not answer 200 after 3 attempts"
-          exit 1
+          if [ "$failed" -ne 0 ]; then
+            echo "::warning::One or more warm targets stayed cold"
+            exit 1
+          fi
+          echo "All warm targets answered OK"

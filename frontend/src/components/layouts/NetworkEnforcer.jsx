@@ -3,11 +3,7 @@ import { useAccount, useSwitchChain } from 'wagmi'
 import { SUPPORTED_CHAINS } from '../../config/chains.config'
 import NeonButton from '../ui/NeonButton'
 
-/**
- * Soft gate: keep the app visible, overlay a switch prompt when the wallet
- * is on an unsupported chain. Replacing `children` entirely made the light
- * theme look like a blank page (white text on cream).
- */
+
 export default function NetworkEnforcer({ children }) {
   const { chain, isConnected } = useAccount()
   const { switchChain, isPending } = useSwitchChain()

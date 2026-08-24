@@ -26,23 +26,16 @@ export const analyticsAPI = {
       },
     }),
 
-  // Explorer / TopBar / Landing all hit this — 30s cache avoids refetch on every navigate.
-  getGlobalStats: async () => {
-    try {
-      const data = await ttlCached(
-        'analytics:global',
-        async () => {
-          const res = await api.get('/analytics/global')
-          return res?.data ?? null
-        },
-        EXPLORER_CACHE_TTL_MS,
-      )
-      return { data }
-    } catch (err) {
-      // Don't leave callers unhandled — TopBar/Explorer expect .then/.catch.
-      throw err
-    }
-  },
+  
+  getGlobalStats: () =>
+    ttlCached(
+      'analytics:global',
+      async () => {
+        const res = await api.get('/analytics/global')
+        return res.data
+      },
+      EXPLORER_CACHE_TTL_MS,
+    ).then((data) => ({ data })),
 
   getLeaderboardStats: () => api.get('/leaderboard/stats'),
 

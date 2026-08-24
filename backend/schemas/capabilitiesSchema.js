@@ -44,9 +44,6 @@ export const capabilitiesSchema = z.object({
   // Deliverables render as one row of chips, so a small cap keeps that readable.
   deliverables: z.array(deliverableSchema).max(8).optional(),
   report: reportShapeSchema.optional(),
-  // Features are a scrolling grid, and a multi-tool agent legitimately has more than
-  // a handful — the research agent declares twelve. Capping this at 8 rejected the
-  // whole declaration and silently dropped the agent to the heuristic path.
   features: z.array(featureSchema).max(20).optional(),
 }).strict()
 
