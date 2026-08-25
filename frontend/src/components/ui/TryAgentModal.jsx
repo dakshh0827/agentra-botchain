@@ -12,8 +12,21 @@ import { streamSSE } from '../../api/stream'
 import AgentAvatar from './AgentAvatar'
 import ReportCard from './ReportCard'
 import ComparisonCard from './ComparisonCard'
+import ChoiceForm from './ChoiceForm'
 import { getAgentExternalId } from '../../utils/helpers'
 import { capabilitiesFor } from '../../utils/agentCapabilities'
+
+function choiceFieldsFrom(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  const choices = Array.isArray(payload.choices) ? payload.choices : null
+  const quickReplies = Array.isArray(payload.quickReplies) ? payload.quickReplies : null
+  if (!choices?.length && !quickReplies?.length) return null
+  return {
+    choices: choices || undefined,
+    quickReplies: quickReplies || undefined,
+    composeTemplate: payload.composeTemplate || undefined,
+  }
+}
 
 const COMPARE_INTENT = /\b(compare|versus|vs\.?|against|competitor)\b/i
 const AUDIT_INTENT = /\b(audit|re-?audit|crawl|scan|seo\s+check|check\s+(this\s+)?site)\b/i
@@ -360,8 +373,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
     }
   }, [open, onClose])
 
-  const run = useCallback(async ({ forceNewRun = false } = {}) => {
-    const text = task.trim()
+  const run = useCallback(async ({ forceNewRun = false, text: override } = {}) => {
+    const text = String(override ?? task).trim()
     if (!text || !agentId || busy) return
 
     if (!isConnected) {
@@ -369,10 +382,27 @@ export default function TryAgentModal({ agent, open, onClose }) {
       return
     }
 
+    // Prior turns only — current message is `task`, not duplicated in history.
+    const priorHistory = turns
+      .filter((t) => (t.role === 'user' || t.role === 'agent') && String(t.text || '').trim())
+      .slice(-10)
+      .map((t) => ({
+        role: t.role === 'agent' ? 'assistant' : 'user',
+        content: String(t.text).slice(0, 2000),
+      }))
+
     setTab('chat')
     setError(null)
     setBusy(true)
-    setTurns((prev) => [...prev, { role: 'user', text }])
+    // New user message retires any open choice forms on prior agent turns.
+    setTurns((prev) => [
+      ...prev.map((t) =>
+        t.role === 'agent' && (t.choices || t.quickReplies)
+          ? { ...t, choicesUsed: true }
+          : t,
+      ),
+      { role: 'user', text },
+    ])
     setTask('')
 
     try {
@@ -424,7 +454,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
         setTurns((prev) => [...prev, { role: 'agent', text: '' }])
         await streamSSE(
           `/agents/${agentId}/execute/stream`,
-          { task: text },
+          { task: text, history: priorHistory.length ? priorHistory : undefined },
           (event) => {
             if (event.type === 'phase') {
               setPhase(
@@ -489,26 +519,41 @@ export default function TryAgentModal({ agent, open, onClose }) {
         if (streamedResult.reportId) setReport(streamedResult)
         if (streamedResult.comparisonId) setComparison(streamedResult)
 
+        const extras = choiceFieldsFrom(streamedResult)
         // An agent can finish with a result payload but never stream a token, which
         // leaves the placeholder bubble blank and the run looking like it failed.
-        if (!spokenText) {
-          const said =
-            streamedResult.spokenSummary ||
-            streamedResult.summary ||
-            (streamedResult.reportId ? 'Run finished — see the report below.' : 'Run finished.')
-          setTurns((prev) => {
-            const next = [...prev]
-            const last = next[next.length - 1]
-            if (last?.role === 'agent' && !last.text) next[next.length - 1] = { role: 'agent', text: said }
-            return next
-          })
-        }
+        const said =
+          spokenText ||
+          streamedResult.spokenSummary ||
+          streamedResult.summary ||
+          (streamedResult.reportId ? 'Run finished — see the report below.' : 'Run finished.')
+        setTurns((prev) => {
+          const next = [...prev]
+          const last = next[next.length - 1]
+          if (last?.role === 'agent') {
+            next[next.length - 1] = {
+              role: 'agent',
+              text: last.text || said,
+              ...(extras || {}),
+              choicesUsed: false,
+            }
+          }
+          return next
+        })
 
         loadHistory()
         return
       }
 
-      const response = await agentsAPI.execute(agentId, text)
+      const fallbackTask = priorHistory.length
+        ? [
+            'Prior chat context (use for NGO/platform/tone — do not invent):',
+            ...priorHistory.map((h) => `${h.role}: ${h.content}`),
+            '',
+            `Latest request: ${text}`,
+          ].join('\n')
+        : text
+      const response = await agentsAPI.execute(agentId, fallbackTask)
       const data = response.data || {}
       const output = data.response ?? data.output ?? data.result ?? data
       const success = data.success !== false && !data.error
@@ -537,7 +582,16 @@ export default function TryAgentModal({ agent, open, onClose }) {
       if (rid) setReportId(rid)
       if (typeof output === 'object' && output?.canChat) setCanChat(true)
 
-      setTurns((prev) => [...prev, { role: 'agent', text: spoken || summary }])
+      const extras = typeof output === 'object' ? choiceFieldsFrom(output) : null
+      setTurns((prev) => [
+        ...prev,
+        {
+          role: 'agent',
+          text: spoken || summary,
+          ...(extras || {}),
+          choicesUsed: false,
+        },
+      ])
       if (rid && typeof output === 'object') setReport(output)
       if (typeof output === 'object' && output?.comparisonId) setComparison(output)
       loadHistory()
@@ -555,8 +609,15 @@ export default function TryAgentModal({ agent, open, onClose }) {
       setPhase(null)
       loadAccess()
     }
-  }, [task, agentId, busy, isConnected, reportId, canChat, loadHistory, loadAccess, caps, report])
+  }, [task, agentId, busy, isConnected, reportId, canChat, loadHistory, loadAccess, caps, report, turns])
 
+  const sendChoice = useCallback(
+    (message) => {
+      if (!message?.trim() || busy) return
+      run({ text: message })
+    },
+    [run, busy],
+  )
   const liveCount = useMemo(
     () => turns.filter((t) => t.role === 'user' || t.role === 'agent').length,
     [turns],
@@ -772,11 +833,21 @@ export default function TryAgentModal({ agent, open, onClose }) {
                             </div>
                           )}
                           {turn.text}
+                          {turn.role === 'agent' &&
+                            !turn.choicesUsed &&
+                            (turn.choices?.length || turn.quickReplies?.length) && (
+                              <ChoiceForm
+                                choices={turn.choices}
+                                quickReplies={turn.quickReplies}
+                                composeTemplate={turn.composeTemplate}
+                                disabled={busy}
+                                onSend={sendChoice}
+                              />
+                            )}
                         </div>
                       </div>
                     ),
                   )}
-
                   {busy && (
                     <div className="flex items-center gap-2 text-xs text-[var(--color-text-dim)] font-mono">
                       <Loader2 size={13} className="animate-spin text-primary" />

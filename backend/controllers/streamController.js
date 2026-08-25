@@ -94,7 +94,7 @@ async function loadAgentForCaller(req, res) {
 }
 
 const executeStream = asyncHandler(async (req, res) => {
-  const { task, maxPages } = executeStreamSchema.parse(req.body)
+  const { task, maxPages, history } = executeStreamSchema.parse(req.body)
   const agent = await loadAgentForCaller(req, res)
   if (!agent) return
 
@@ -111,7 +111,12 @@ const executeStream = asyncHandler(async (req, res) => {
     await relay(
       res,
       `${base}/execute/stream`,
-      { task, maxPages, meta: { platform: 'agentra', agentId: agent.agentId, callerWallet: req.walletAddress } },
+      {
+        task,
+        maxPages,
+        history: history || undefined,
+        meta: { platform: 'agentra', agentId: agent.agentId, callerWallet: req.walletAddress },
+      },
       (event) => {
         if (event.type === 'result') result = event.payload
         if (event.type === 'error') failure = event.error
