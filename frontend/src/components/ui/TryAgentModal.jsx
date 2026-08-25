@@ -457,6 +457,18 @@ export default function TryAgentModal({ agent, open, onClose }) {
         setPhase(null)
       }
 
+     
+      if (
+        agentSaid &&
+        !streamedResult &&
+        !spokenText &&
+        /does not support streaming/i.test(agentSaid)
+      ) {
+        agentSaid = null
+        setTurns((prev) => (prev[prev.length - 1]?.text === '' ? prev.slice(0, -1) : prev))
+        console.info('Agent lacks stream support, using plain execute')
+      }
+
       if (agentSaid && !streamedResult && !spokenText) {
         setTurns((prev) => {
           const next = [...prev]

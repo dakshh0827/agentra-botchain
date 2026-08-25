@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAccount } from 'wagmi'
-import { BadgeCheck, LayoutGrid, ArrowUpRight } from 'lucide-react'
+import { LayoutGrid, ArrowUpRight } from 'lucide-react'
 import { agentsAPI } from '../../api/agents'
 import { getAgentExternalId } from '../../utils/helpers'
 import { EXPLORER_CACHE_TTL_MS, ttlCached, ttlGet, ttlHas } from '../../utils/ttlCache'
@@ -61,11 +61,17 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
             <div className="shrink-0 rounded-[13px] shadow-[0_3px_10px_rgba(111,53,178,0.30)]">
               <AgentAvatar agent={agent} size={52} />
             </div>
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-[#d9c2f2] bg-accent-pink text-primary-deep">
-              <BadgeCheck size={10} /> Agentra
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-success/20 bg-success/10 text-success">
+              <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
+              Live
             </span>
           </div>
-          <h3 className="font-bold text-lg text-text-primary mt-3 truncate font-display">{agent.name}</h3>
+          <h3
+            className="font-bold text-lg text-text-primary mt-3 line-clamp-2 font-display"
+            title={agent.name}
+          >
+            {agent.name}
+          </h3>
           <p className="text-[11px] text-text-muted mt-0.5">Built and run by Agentra</p>
           <p className="mt-2.5 text-sm leading-relaxed text-text-secondary flex-1 line-clamp-3">
             {agent.description || 'No description provided.'}
@@ -96,14 +102,17 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
           <div className="shrink-0 rounded-[11px] overflow-hidden shadow-sm ring-1 ring-[#d9c2f2]">
             <AgentAvatar agent={agent} size={38} />
           </div>
-          <h3 className="font-bold text-lg text-text-primary line-clamp-1 group-hover:text-primary transition-colors font-display">
+          <h3
+            className="font-bold text-lg text-text-primary line-clamp-2 group-hover:text-primary transition-colors font-display"
+            title={agent.name}
+          >
             {agent.name}
           </h3>
         </div>
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-accent-pink border border-[#d9c2f2] rounded-lg text-primary">
-          <BadgeCheck size={10} />
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-success/10 border border-success/20 rounded-lg text-success shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-success pulse-dot" />
           <span className="text-[9px] uppercase font-bold tracking-wider whitespace-nowrap">
-            Agentra
+            Live
           </span>
         </div>
       </div>
