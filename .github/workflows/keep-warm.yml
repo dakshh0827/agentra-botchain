@@ -19,6 +19,7 @@ jobs:
           BACKEND_URL: ${{ vars.BACKEND_URL || vars.BACKEND }}
           SEO_URL: ${{ vars.SEO_AGENT_URL || 'https://agentra-seo.onrender.com' }}
           RESEARCH_URL: ${{ vars.RESEARCH_AGENT_URL || 'https://agentra-research.onrender.com' }}
+          CONTENT_URL: ${{ vars.CONTENT_AGENT_URL || 'https://agentra-content.onrender.com' }}
         run: |
           set -u
           failed=0
@@ -62,6 +63,9 @@ jobs:
           fi
           if [ -n "${RESEARCH_URL:-}" ]; then
             ping_url "agentra-research" "${RESEARCH_URL%/}/health" || failed=1
+          fi
+          if [ -n "${CONTENT_URL:-}" ]; then
+            ping_url "agentra-content" "${CONTENT_URL%/}/health" || failed=1
           fi
 
           if [ "$failed" -ne 0 ]; then
