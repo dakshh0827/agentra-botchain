@@ -1,10 +1,4 @@
-/**
- * Link a DB agent to its on-chain contractAgentId (after deploy / if confirmDeploy was skipped).
- *
- * Usage:
- *   node scripts/set-contract-agent-id.js Agentra-SEO 9
- *   node scripts/set-contract-agent-id.js cmt2ht8os00025aug17rikwaf 9
- */
+
 import 'dotenv/config'
 import prisma from '../lib/prisma.js'
 

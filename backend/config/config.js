@@ -92,8 +92,8 @@ console.log('[CONFIG] Has Private Key:', !!config.blockchain.privateKey)
 console.log('[CONFIG] Storage RPC URL:', config.storage.rpcUrl || '(not set)')
 console.log('[CONFIG] Storage Indexer RPC:', config.storage.indexerRpc || '(not set)')
 console.log('[CONFIG] Has Storage Private Key:', !!config.storage.privateKey)
-console.log('[CONFIG] Free tier:', config.freeTier.openAccess
-  ? 'OPEN ACCESS (all agents free for any wallet)'
-  : `${config.freeTier.runsPerAgent} free run(s) per wallet per agent`)
+// FREE TIER DISABLED in services/accessService.js — these settings are ignored until
+// the commented-out blocks there are restored.
+console.log('[CONFIG] Free tier: DISABLED (purchase required for every agent)')
 
 export default config

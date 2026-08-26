@@ -64,12 +64,32 @@ function hostsInText(text) {
 
 function wantsFreshRun(text, report) {
   const hosts = hostsInText(text)
-  if (!hosts.length) return false
+  const structuredBrief = /\b(brand\s*name|website\s*[:=-]|keywords?\s+(?:for\s+)?blog|topic\s*[:=-])\b/i.test(
+    text || '',
+  )
+  const blogJob = /\b(blog|article|long[- ]?form)\b/i.test(text || '')
+
+  // Structured brand/website/topic brief → always a new content job.
+  if (structuredBrief && (hosts.length || blogJob || (text || '').length > 60)) {
+    return true
+  }
+
+  if (!hosts.length) {
+    // New blog ask without a URL still leaves the previous Canvas-style report.
+    if (blogJob && report && (report.title || report.summary || report.reportId)) {
+      const prior = `${report.title || ''} ${report.summary || ''} ${report.query || ''}`.toLowerCase()
+      const brandMatch = text.match(/(?:brand\s*name|company)\s*[-:=]\s*(.+)/i)
+      if (brandMatch && brandMatch[1] && !prior.includes(brandMatch[1].trim().toLowerCase().slice(0, 24))) {
+        return true
+      }
+    }
+    return false
+  }
   if (COMPARE_INTENT.test(text)) return false
 
-  const current = normalizeHost(report?.host || report?.url || '')
+  const current = normalizeHost(report?.host || report?.url || report?.query || '')
   if (!current) return true
-  if (hosts.some((h) => h !== current)) return true
+  if (hosts.some((h) => h !== current && !current.includes(h) && !h.includes(current))) return true
   if (AUDIT_INTENT.test(text)) return true
 
   // Message is basically just a site URL → treat as a new run of that site.
@@ -406,9 +426,8 @@ export default function TryAgentModal({ agent, open, onClose }) {
     setTask('')
 
     try {
-      // Two ways to leave the chat channel and start over: the user asked for it
-      // outright, or the agent opted into detecting a new target from the message.
-      const freshRun = forceNewRun || (caps.multiRun && wantsFreshRun(text, report))
+      // Detect a new brand/URL/blog brief so prior Canvas (or any) context does not bleed in.
+      const freshRun = forceNewRun || wantsFreshRun(text, report)
       if (reportId && canChat && !freshRun) {
         let streamed = ''
         setTurns((prev) => [...prev, { role: 'agent', text: '' }])
@@ -454,7 +473,11 @@ export default function TryAgentModal({ agent, open, onClose }) {
         setTurns((prev) => [...prev, { role: 'agent', text: '' }])
         await streamSSE(
           `/agents/${agentId}/execute/stream`,
-          { task: text, history: priorHistory.length ? priorHistory : undefined },
+          {
+            task: text,
+            // Fresh brand/site jobs must not inherit Canvas Client (or any prior) context.
+            history: freshRun || !priorHistory.length ? undefined : priorHistory,
+          },
           (event) => {
             if (event.type === 'phase') {
               setPhase(
@@ -545,7 +568,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
         return
       }
 
-      const fallbackTask = priorHistory.length
+      const fallbackTask = (!freshRun && priorHistory.length)
         ? [
             'Prior chat context (use for NGO/platform/tone — do not invent):',
             ...priorHistory.map((h) => `${h.role}: ${h.content}`),
