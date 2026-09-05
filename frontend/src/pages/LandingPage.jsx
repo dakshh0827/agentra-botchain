@@ -23,11 +23,11 @@ import {
   MessageCircle,
   FileText,
   Gem,
-  Loader2, 
-  Mail,
-  Zap
+  Loader2,
+  Mail
 } from 'lucide-react'
 import { analyticsAPI } from '../api/analytics'
+import { IconBuild, IconDeploy, IconMint, IconRoute, IconExecute, IconSettle } from '../components/WorkflowScrollSection'
 
 const capabilities = [
   { 
@@ -330,54 +330,410 @@ function Counter({ value }) {
 
 // ── Workflow ───────────────────────────────────────────────────────────────
 
-// ── 1. The New Infrastructure Flow Component ──────────────────────────────
-const InfrastructureFlow = () => {
-  const steps = [
-    { icon: Terminal, title: 'Deploy', desc: 'Devs push agents via Deploy Studio' },
-    { icon: Gem, title: 'Mint iNFT', desc: 'Protocol mints immutable ownership' },
-    { icon: Network, title: 'Route', desc: 'MCP endpoints handle secure access' },
-    { icon: Zap, title: 'Execute', desc: 'Users & swarms invoke inferences' },
-    { icon: Lock, title: 'Settle', desc: '0G network meters and clears funds' }
-  ]
+// ── 1. Workflow Roadmap — a horizontal, winding road with 6 stops ────────
+// Icons are the hand-drawn set shared with WorkflowScrollSection, so the
+// marker on the road always matches what the step actually does instead of
+// a generic lucide glyph.
+const ROADMAP_STEPS = [
+  {
+    Icon: IconBuild, title: 'Build', desc: 'Configure prompts, models & tools in Deploy Studio.',
+    points: ['Pick a base model or bring your own', 'Wire up MCP tool access', 'Test runs before going live'],
+  },
+  {
+    Icon: IconDeploy, title: 'Deploy', desc: 'Push the agent live with a single click.',
+    points: ['Metadata uploaded to 0G Storage', 'Agent gets a live MCP endpoint', 'Set your own fee structure'],
+  },
+  {
+    Icon: IconMint, title: 'Mint iNFT', desc: 'ERC-7857 mints immutable on-chain ownership.',
+    points: ['Provenance recorded on 0G Chain', 'Ownership is transferable & verifiable', 'Fully auditable, no black box'],
+  },
+  {
+    Icon: IconRoute, title: 'Route', desc: 'MCP endpoints handle secure agent access.',
+    points: ['Requests authenticated per endpoint', 'Swarms & agents can call each other', 'Rate limits enforced on-chain'],
+  },
+  {
+    Icon: IconExecute, title: 'Execute', desc: 'Users & swarms invoke inferences in real time.',
+    points: ['Streaming responses over MCP', 'A2A calls composable in workflows', 'Usage logged for settlement'],
+  },
+  {
+    Icon: IconSettle, title: 'Settle', desc: '0G network meters usage and clears funds.',
+    points: ['Pay-per-call billing, no subscriptions', 'Creators paid automatically', 'Full history on your Dashboard'],
+  },
+]
 
+// The road runs left → right but stays inside one viewport-width — sized
+// close to the rendered container (max-w-7xl) so it fits at a scale where
+// card text is still legible without any horizontal scrolling.
+const ROAD_W = 1380
+const SIDE_PADDING = 160
+const ROAD_H = 875
+const CARD_W = 265
+const CARD_H = 240
+const MARKER_R = 41
+const CONNECT_GAP = 20
+const TOP_Y = 345
+const BOT_Y = 530
+const MARKER_PAD = 11
+
+// Stops alternate top/bottom, evenly spaced along x — a plain, compact
+// zigzag with no loops or twists.
+const ROAD_POINTS = [
+  { x: SIDE_PADDING + 0,    y: TOP_Y },
+  { x: SIDE_PADDING + 207,  y: BOT_Y },
+  { x: SIDE_PADDING + 414,  y: TOP_Y },
+  { x: SIDE_PADDING + 621,  y: BOT_Y },
+  { x: SIDE_PADDING + 828,  y: TOP_Y },
+  { x: SIDE_PADDING + 1035, y: BOT_Y },
+]
+
+// Smooth S-curve through the points. Control points share their endpoint's
+// own x, which keeps the curve's x always between the two endpoints — a
+// clean zigzag, no bulging loops.
+const CURVE = 140 // controls smoothness
+
+const ROAD_PATH = ROAD_POINTS.slice(1).reduce((d, p, i) => {
+  const prev = ROAD_POINTS[i]
+
+  return `${d} C 
+    ${prev.x + CURVE} ${prev.y}, 
+    ${p.x - CURVE} ${p.y}, 
+    ${p.x} ${p.y}`
+}, `M ${ROAD_POINTS[0].x} ${ROAD_POINTS[0].y}`)
+
+// Doodles read as a "liquid" — small clusters of bonded circles packed
+// close together — rather than a "gas" of single specks drifting far apart.
+// Molecule is the workhorse; Sparkle/Grass just add texture between clusters.
+const Molecule = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.55"
+    stroke="var(--color-border-bright)" strokeWidth="2" fill="var(--color-bg-tertiary)">
+    <line x1="0" y1="0" x2="20" y2="-12" />
+    <line x1="0" y1="0" x2="-16" y2="10" />
+    <line x1="20" y1="-12" x2="30" y2="4" />
+    <line x1="-16" y1="10" x2="-10" y2="26" />
+    <circle cx="0" cy="0" r="7" />
+    <circle cx="20" cy="-12" r="5.5" />
+    <circle cx="-16" cy="10" r="5" />
+    <circle cx="30" cy="4" r="4" />
+    <circle cx="-10" cy="26" r="4" />
+  </g>
+)
+
+const Sparkle = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9" stroke="var(--color-primary)" strokeWidth="2.4" strokeLinecap="round">
+    <path d="M0 -12v8M0 4v8M-12 0h8M4 0h8M-7 -7l4 4M3 3l4 4M-7 7l4 -4M3 -3l4 -4" />
+  </g>
+)
+
+const Orbit = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-primary)" strokeWidth="2" fill="none">
+    <ellipse cx="0" cy="0" rx="18" ry="8" transform="rotate(-20)" />
+    <circle cx="0" cy="0" r="3.5" fill="var(--color-primary)" stroke="none" />
+    <circle cx="17" cy="2" r="3" fill="var(--color-bg-tertiary)" />
+  </g>
+)
+
+const Cube = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-border-bright)" strokeWidth="2" strokeLinejoin="round" fill="var(--color-bg-tertiary)">
+    <path d="M0 -14L14 -7V7L0 14L-14 7V-7Z" />
+    <path d="M0 -14V0M0 0L14 -7M0 0L-14 -7" />
+  </g>
+)
+
+const Cloud = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-text-dim)" strokeWidth="2" fill="none" strokeLinecap="round">
+    <path d="M-16 6a8 8 0 0 1 2-15.7 10 10 0 0 1 19-2A7 7 0 0 1 16 6Z" />
+  </g>
+)
+
+const Wave = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-primary)" strokeWidth="2.4" fill="none" strokeLinecap="round">
+    <path d="M-20 0C-14 -10 -6 -10 0 0S14 10 20 0" />
+  </g>
+)
+
+const Ring = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-success)" strokeWidth="2" fill="none">
+    <circle cx="0" cy="0" r="14" />
+    <circle cx="0" cy="0" r="7" />
+  </g>
+)
+
+const Coin = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-primary)" strokeWidth="2" fill="var(--color-bg-tertiary)">
+    <circle cx="0" cy="0" r="12" />
+    <path d="M0 -6V6M-4 -3h6a3 3 0 0 1 0 6h-6M-4 3h7" strokeWidth="1.6" fill="none" />
+  </g>
+)
+
+const Triangle = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-text-dim)" strokeWidth="2" strokeLinejoin="round" fill="none">
+    <path d="M0 -14L14 10H-14Z" />
+  </g>
+)
+
+const Zigzag = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-border-bright)" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M-18 8L-9 -8L0 8L9 -8L18 8" />
+  </g>
+)
+
+const PlusGrid = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-text-dim)" strokeWidth="1.6" strokeLinecap="round">
+    {[-12, 0, 12].map((dx) =>
+      [-12, 0, 12].map((dy) => (
+        <g key={`${dx}-${dy}`} transform={`translate(${dx} ${dy})`}>
+          <path d="M-2.5 0h5M0 -2.5v5" />
+        </g>
+      ))
+    )}
+  </g>
+)
+
+const Diamond = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-primary)" strokeWidth="2" strokeLinejoin="round" fill="var(--color-bg-tertiary)">
+    <path d="M0 -14L11 0L0 14L-11 0Z" />
+  </g>
+)
+
+const Orbit2 = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9"
+    stroke="var(--color-success)" strokeWidth="2" fill="none">
+    <ellipse cx="0" cy="0" rx="16" ry="16" strokeDasharray="4 5" />
+  </g>
+)
+
+const Grass = ({ x, y, scale = 1 }) => (
+  <g transform={`translate(${x} ${y}) scale(${scale})`} opacity="0.9" stroke="var(--color-success)" strokeWidth="2.4" strokeLinecap="round" fill="none">
+    <path d="M-8 10C-9 0 -6 -8 -4 -12" />
+    <path d="M0 10C0 -2 1 -9 3 -13" />
+    <path d="M8 10C9 1 7 -6 5 -11" />
+  </g>
+)
+
+const Flag = ({ x, y, checkered = false }) => (
+  <g transform={`translate(${x} ${y})`}>
+    <path d="M0 30V0" stroke="var(--color-text-dim)" strokeWidth="2.4" strokeLinecap="round" />
+    {checkered ? (
+      <g>
+        <rect x="0" y="0" width="22" height="16" fill="var(--color-text-primary)" opacity="0.85" />
+        {[0, 1, 2, 3].flatMap((r) =>
+          [0, 1].map((c) =>
+            (r + c) % 2 === 0 ? <rect key={`${r}-${c}`} x={c * 11} y={r * 4} width="11" height="4" fill="var(--color-bg)" /> : null
+          )
+        )}
+      </g>
+    ) : (
+      <path d="M0 2c8-4 14-4 22 0v14c-8-4-14-4-22 0Z" fill="var(--color-primary)" opacity="0.85" />
+    )}
+  </g>
+)
+
+const DOODLE_FIELD = [
+  { type: 'molecule', x: 60,   y: 90,  scale: 0.6 },
+  { type: 'molecule', x: 480,  y: 80,  scale: 0.7 },
+  { type: 'molecule', x: 920,  y: 90,  scale: 0.85 },
+  { type: 'molecule', x: 160,  y: 470, scale: 0.4 },
+
+  { type: 'sparkle', x: 220,  y: 60,  scale: 1 },
+  { type: 'sparkle', x: 640,  y: 60,  scale: 0.6 },
+  { type: 'sparkle', x: 1150, y: 90,  scale: 0.9 },
+  { type: 'sparkle', x: 980,  y: 470, scale: 0.7 },
+
+  { type: 'grass', x: 100,  y: 700, scale: 0.9 },
+  { type: 'grass', x: 420,  y: 630, scale: 1 },
+  { type: 'grass', x: 780,  y: 200, scale: 0.5 },
+  { type: 'grass', x: 1160, y: 690, scale: 0.75 },
+
+  { type: 'orbit', x: 300,  y: 150, scale: 0.8 },
+  { type: 'orbit', x: 860,  y: 620, scale: 0.6 },
+
+  { type: 'cube', x: 40,   y: 620, scale: 0.6 },
+  { type: 'cube', x: 700,  y: 90,  scale: 0.5 },
+  { type: 'cube', x: 1100, y: 300, scale: 0.7 },
+
+  { type: 'cloud', x: 380,  y: 700, scale: 0.7 },
+  { type: 'cloud', x: 1000, y: 130, scale: 0.6 },
+
+  { type: 'wave', x: 200,  y: 350, scale: 0.9 },
+  { type: 'wave', x: 950,  y: 700, scale: 0.7 },
+
+  { type: 'ring', x: 560,  y: 200, scale: 0.6 },
+  { type: 'ring', x: 40,   y: 300, scale: 0.5 },
+
+  { type: 'coin', x: 620,  y: 690, scale: 0.6 },
+  { type: 'coin', x: 1180, y: 500, scale: 0.5 },
+
+  { type: 'triangle', x: 360, y: 90,  scale: 0.5 },
+  { type: 'triangle', x: 820, y: 660, scale: 0.6 },
+
+  { type: 'zigzag', x: 500,  y: 640, scale: 0.6 },
+  { type: 'zigzag', x: 1050, y: 600, scale: 0.5 },
+
+  { type: 'plusgrid', x: 260, y: 650, scale: 0.5 },
+  { type: 'plusgrid', x: 1150, y: 200, scale: 0.4 },
+
+  { type: 'diamond', x: 460,  y: 350, scale: 0.5 },
+  { type: 'diamond', x: 900,  y: 320, scale: 0.55 },
+
+  { type: 'orbit2', x: 140,  y: 550, scale: 0.7 },
+  { type: 'orbit2', x: 1020, y: 60,  scale: 0.6 },
+]
+
+const DOODLE_COMPONENTS = {
+  molecule: Molecule,
+  sparkle: Sparkle,
+  grass: Grass,
+  orbit: Orbit,
+  cube: Cube,
+  cloud: Cloud,
+  wave: Wave,
+  ring: Ring,
+  coin: Coin,
+  triangle: Triangle,
+  zigzag: Zigzag,
+  plusgrid: PlusGrid,
+  diamond: Diamond,
+  orbit2: Orbit2,
+}
+
+const DoodleField = () => (
+  <g opacity="0.35">
+    {DOODLE_FIELD.map((d, i) => {
+      const Comp = DOODLE_COMPONENTS[d.type]
+      return Comp ? <Comp key={i} x={d.x} y={d.y} scale={d.scale} /> : null
+    })}
+  </g>
+)
+
+const WorkflowRoadmap = () => {
   return (
-    <div className="relative py-12">
-      {/* Connecting Line (Desktop) */}
-      <div className="hidden lg:block absolute top-1/2 left-0 w-full h-[2px] bg-border -translate-y-1/2">
-        <motion.div 
-          className="h-full bg-gradient-to-r from-primary-light via-primary to-primary-light"
-          animate={{ x: ['-100%', '100%'] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-          style={{ width: '50%' }}
-        />
+    <div className="relative">
+      {/* Desktop / laptop — the full horizontal road. It's wider than the
+          viewport by design, so this shell scrolls sideways natively; below
+          `lg` there's no room for that interaction to feel intentional, so
+          that breakpoint falls back to a plain stacked list instead. */}
+      <div className="hidden lg:block">
+        {/* <p className="text-center text-xs uppercase tracking-[0.2em] text-text-dim mb-3">Scroll to follow the road →</p> */}
+        <div className="w-full pb-2 px-5">
+          <svg 
+            viewBox={`0 0 ${ROAD_W} ${ROAD_H}`} 
+            className="w-full h-auto block"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <DoodleField />
+
+            {/* road bed */}
+            <path d={ROAD_PATH} fill="none" stroke="var(--color-border-bright)" strokeWidth="42" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+            {/* highlighted route, drawn in on scroll */}
+            <motion.path
+              d={ROAD_PATH}
+              fill="none"
+              stroke="var(--color-primary)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              whileInView={{ pathLength: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 2.4, ease: 'easeInOut' }}
+            />
+
+            <Flag x={2660} y={690} checkered />
+
+            {ROADMAP_STEPS.map((step, i) => {
+              const p = ROAD_POINTS[i]
+              const isTop = i % 2 === 0
+              const cardX = p.x - CARD_W / 2
+              const cardY = isTop ? p.y - MARKER_R - CONNECT_GAP - CARD_H : p.y + MARKER_R + CONNECT_GAP
+              const lineY1 = isTop ? p.y - MARKER_R : p.y + MARKER_R
+              const lineY2 = isTop ? cardY + CARD_H : cardY
+              const Icon = step.Icon
+              return (
+                <g key={step.title}>
+                  <line x1={p.x} y1={lineY1} x2={p.x} y2={lineY2} stroke="var(--color-border-bright)" strokeWidth="2" strokeDasharray="3 4" />
+                  <foreignObject
+                    x={p.x - MARKER_R - MARKER_PAD}
+                    y={p.y - MARKER_R - MARKER_PAD}
+                    width={MARKER_R * 2 + MARKER_PAD * 2}
+                    height={MARKER_R * 2 + MARKER_PAD * 2}
+                  >
+                    <div className="w-full h-full flex items-center justify-center overflow-visible">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        whileInView={{ scale: 1 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: i * 0.15, type: 'spring', stiffness: 260, damping: 18 }}
+                        className="w-16 h-16 rounded-full bg-bg border-2 border-primary shadow-soft flex items-center justify-center text-primary relative"
+                      >
+                        <Icon className="w-7 h-7" />
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
+                          {i + 1}
+                        </span>
+                      </motion.div>
+                    </div>
+                  </foreignObject>
+                  <foreignObject x={cardX} y={cardY} width={CARD_W} height={CARD_H}>
+                    <motion.div
+                      initial={{ opacity: 0, y: isTop ? 20 : -20 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.15 + 0.1, duration: 0.5 }}
+                      className="workflow-card h-full rounded-2xl bg-panel p-5 flex flex-col justify-center"
+                    >
+                      <span className="text-xs font-mono tracking-[0.2em] uppercase text-text-dim mb-1.5">Step {i + 1}</span>
+                      <h4 className="text-xl font-display font-bold text-text-primary mb-2 leading-snug">{step.title}</h4>
+                      <p className="text-sm text-text-secondary leading-relaxed mb-3">{step.desc}</p>
+                      <ul className="space-y-2 w-full">
+                        {step.points.map((point) => (
+                          <li key={point} className="flex items-start gap-2 text-sm text-text-secondary leading-snug">
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0" />
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                    </motion.div>
+                  </foreignObject>
+                </g>
+              )
+            })}
+          </svg>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-4 relative z-10">
-        {steps.map((step, idx) => (
-          <motion.div 
-            key={idx}
-            initial={{ opacity: 0, y: 20 }}
+      {/* Tablet / mobile fallback — no room for the road, just the stops */}
+      <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {ROADMAP_STEPS.map((step, i) => (
+          <motion.div
+            key={step.title}
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: idx * 0.15, duration: 0.5 }}
-            className="flex flex-col items-center text-center group"
+            transition={{ delay: i * 0.08, duration: 0.4 }}
+            className="workflow-card rounded-2xl bg-panel p-5 flex flex-col items-start"
           >
-            {/* Connecting Line (Mobile) */}
-            {idx !== 0 && <div className="h-8 w-[2px] bg-border lg:hidden mb-4" />}
-            
-            <div className="w-16 h-16 rounded-2xl glass-panel flex items-center justify-center mb-4 relative group-hover:border-primary/50 transition-colors shadow-soft">
-              {/* Ping effect */}
-              <div className="absolute inset-0 rounded-2xl bg-primary/20 scale-150 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <step.icon size={24} className="text-primary relative z-10" />
-              
-              {/* Step Number Badge */}
-              <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shadow-md">
-                {idx + 1}
-              </div>
+            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 text-primary relative">
+              <step.Icon className="w-5 h-5" />
+              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">{i + 1}</span>
             </div>
-            
             <h4 className="text-base font-display font-bold text-text-primary mb-1">{step.title}</h4>
-            <p className="text-xs text-text-secondary leading-relaxed max-w-[160px]">{step.desc}</p>
+            <p className="text-xs text-text-secondary leading-relaxed mb-2.5">{step.desc}</p>
+            <ul className="space-y-1.5 w-full">
+              {step.points.map((point) => (
+                <li key={point} className="flex items-start gap-2 text-xs text-text-secondary leading-snug">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0" />
+                  {point}
+                </li>
+              ))}
+            </ul>
           </motion.div>
         ))}
       </div>
@@ -727,14 +1083,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* WORKFLOW */}
-      <section className="relative z-10 w-full border-t border-border section-light">
-        <div className="max-w-7xl mx-auto px-5 py-20">
+              {/* WORKFLOW */}
+        <section className="relative z-10 w-full border-t border-border section-light">
+          <div className="max-w-[84rem] mx-auto px-5 py-20">
           <div className="max-w-3xl mx-auto text-center mb-10">
             <h2 className="text-3xl font-display font-semibold tracking-tight mb-3">Protocol Lifecycle</h2>
             <p className="text-text-secondary text-lg">How agents, creators, and users exchange value inside the Agentra network.</p>
           </div>
-          <InfrastructureFlow /> {/* <--- REPLACED HERE */}
+          <WorkflowRoadmap />
         </div>
       </section>
 

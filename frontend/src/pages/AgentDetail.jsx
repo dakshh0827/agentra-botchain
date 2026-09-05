@@ -22,6 +22,7 @@ import RuntimeExecutionForm from '../components/execution/Runtimeexecutionform'
 import RunLocallyPanel from '../components/execution/RunLocallyPanel'
 import { agentsAPI } from '../api/agents'
 import { CHAIN_CONFIG } from '../config/chains.config'
+import { MIN_PRIORITY_FEE_WEI, MAX_FEE_PER_GAS_WEI } from '../config/custom-chains'
 import { getAgentExternalId } from '../utils/helpers'
 import buildBinaryDownload from '../utils/buildBinaryDownload'
 
@@ -131,9 +132,14 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
         functionName: 'purchaseAccess',
         args: [BigInt(agent.contractAgentId), period],
         value: buffered,
+        maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+        maxFeePerGas: MAX_FEE_PER_GAS_WEI,
       })
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+      if (receipt.status !== 'success') {
+        throw new Error(`Transaction reverted on-chain (tx: ${txHash}).`)
+      }
 
       await agentsAPI.purchaseAccess(
         getAgentExternalId(agent),
@@ -239,9 +245,14 @@ function BlockchainPurchasePanel({ agent, onSuccess, pendingTx }) {
         functionName: 'purchaseAccess',
         args: [BigInt(agent.contractAgentId), period],
         value: buffered,
+        maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+        maxFeePerGas: MAX_FEE_PER_GAS_WEI,
       })
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+      if (receipt.status !== 'success') {
+        throw new Error(`Transaction reverted on-chain (tx: ${txHash}).`)
+      }
 
       await agentsAPI.purchaseAccess(
         getAgentExternalId(agent),
@@ -615,6 +626,8 @@ function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync
         abi: contracts.Agentra.abi,
         functionName: 'updateAgentPricing',
         args: [BigInt(agent.contractAgentId), newMonthlyUSD, newCommsUSD],
+        maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+        maxFeePerGas: MAX_FEE_PER_GAS_WEI,
       })
 
       await publicClient.waitForTransactionReceipt({ hash: txHash })
@@ -646,6 +659,8 @@ function OwnerControlsPanel({ agent, contracts, publicClient, writeContractAsync
         abi: contracts.Agentra.abi,
         functionName: 'toggleAgentComms',
         args: [BigInt(agent.contractAgentId), newState],
+        maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+        maxFeePerGas: MAX_FEE_PER_GAS_WEI,
       })
       await publicClient.waitForTransactionReceipt({ hash: txHash })
  
@@ -1059,7 +1074,7 @@ console.log('========================================\n')
   )
 
   return (
-    <div className="relative min-h-screen bg-[var(--color-bg)]">
+    <div className="relative min-h-screen bg-[var(--color-bg)] px-4 sm:px-6 lg:px-8 py-5 lg:py-8">
       {toastMessage && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg text-sm shadow-lg backdrop-blur-md ${toastMessage.type === 'success' ? 'bg-[rgba(52,211,153,0.15)] border border-[var(--color-success)] text-[var(--color-success)]' : 'bg-[rgba(248,113,113,0.15)] border border-[var(--color-danger)] text-[var(--color-danger)]'}`}>
@@ -1070,7 +1085,7 @@ console.log('========================================\n')
 
       <div className="fixed top-20 right-10 w-[500px] h-[400px] rounded-full pointer-events-none opacity-25 bg-[var(--color-bg-secondary)]" />
 
-      <div className="relative z-10 p-5 lg:p-8 max-w-7xl mx-auto">
+      <div className="relative z-10 max-w-7xl mx-auto">
         <Link to="/explorer">
           <motion.div whileHover={{ x: -4 }} className="inline-flex items-center gap-2 text-[var(--color-text-dim)] hover:text-[var(--color-primary)] text-[11px] font-mono  mb-6 transition-colors cursor-pointer group">
             <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />

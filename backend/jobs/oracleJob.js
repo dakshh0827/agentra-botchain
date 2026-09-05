@@ -49,13 +49,32 @@ async function runOracleUpdate() {
     const priceUSD = await fetch0GPrice()
     lastKnownPriceUSD = priceUSD
 
-    // Convert to 18-decimal wei representation (e.g., $1.25 → 1250000000000000000)
-    const priceWei = ethers.parseUnits(priceUSD.toFixed(18).slice(0, 20), 18)
+    // priceUSD.toString() uses JS's shortest round-trip decimal representation, so it
+    // only carries digits the float actually has. toFixed(18) instead manufactures 18
+    // decimal digits from IEEE-754 rounding noise (e.g. 0.1 -> "0.100000000000000006"),
+    // and the old .slice(0, 20) truncated that at a fixed character count regardless of
+    // how many digits belonged to the integer part — both are precision bugs.
+    const priceWei = ethers.parseUnits(priceUSD.toString(), 18)
+
+    // Skip the on-chain write if the price hasn't moved enough to be worth the gas.
+    // Reads the live contract value (not an in-memory cache) so this stays correct
+    // across process restarts, and treats a revert (uninitialized oracle) as "always write".
+    const onChainPriceWei = await contractManager.getCurrent0GPrice()
+    if (onChainPriceWei && onChainPriceWei > 0n) {
+      const diff = priceWei > onChainPriceWei ? priceWei - onChainPriceWei : onChainPriceWei - priceWei
+      const changePercent = Number((diff * 10000n) / onChainPriceWei) / 100
+      if (changePercent < 1) {
+        console.log(`[ORACLE] Price change ${changePercent.toFixed(3)}% < 1% threshold — skipping update ($${priceUSD} USD / ${priceWei} wei, on-chain: ${onChainPriceWei} wei)`)
+        return
+      }
+    }
+
+    console.log(`[ORACLE] Updating price: $${priceUSD} USD -> ${priceWei} wei`)
 
     const tx = await contractManager.agentra.update0GPrice(priceWei)
     const receipt = await tx.wait(1)
 
-    console.log(`[ORACLE] ✅ 0G price updated: $${priceUSD} | tx: ${receipt.hash}`)
+    console.log(`[ORACLE] ✅ 0G price updated: $${priceUSD} USD (${priceWei} wei) | tx: ${receipt.hash}`)
 
     // Cache price in config for reference
     config.oracle.lastPrice = priceUSD
@@ -79,3 +98,8 @@ function startOracleJob() {
 }
 
 export { startOracleJob, runOracleUpdate, lastKnownPriceUSD }
+
+if (process.argv[1].includes('oracleJob.js')) {
+  console.log('[ORACLE DEBUG] Running one-time update...')
+  runOracleUpdate()
+}

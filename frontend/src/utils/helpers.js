@@ -27,12 +27,15 @@ export const generateAgentId = () => {
   return 'AGT-' + Math.random().toString(36).substring(2, 10).toUpperCase()
 }
 
+// Used to address the backend (routes, execute/purchase/access calls) — never
+// for on-chain contract reads, which should keep using agent.contractAgentId
+// directly. contractAgentId is only unique per contract deployment: it resets
+// to 0 every time the Agentra contract is redeployed, so a new agent can end
+// up sharing the same contractAgentId as an old agent minted on the previous
+// contract. agentId (DB cuid) is globally unique forever, so it's the only
+// safe identifier for routing.
 export const getAgentExternalId = (agent) => {
   if (!agent) return ''
 
-  if (agent.contractAgentId !== null && agent.contractAgentId !== undefined) {
-    return String(agent.contractAgentId)
-  }
-
-  return String(agent.agentId || agent.id || agent._id || '')
+  return String(agent.agentId || agent.id || agent._id || agent.contractAgentId || '')
 }

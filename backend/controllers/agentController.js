@@ -239,6 +239,7 @@ const deployAgent = asyncHandler(async (req, res) => {
     ...agent,
     deployParams: sevenEightFiveSeven ? {
       monthlyPriceUSD: data.pricing,
+      metadataURI, // the actual JSON manifest URI — pass this to deployStandardAgent, not avatarURI
       avatarURI: data.avatarUrl || metadataURI,
       displayName: data.name,
       dataCommitment: sevenEightFiveSeven.dataCommitment,

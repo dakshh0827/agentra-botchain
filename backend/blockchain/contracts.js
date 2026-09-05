@@ -9,9 +9,9 @@ const AGENTRA_ABI = [
   // ─────────────────────────────────────────────
   // DEPLOYMENT — now takes a single DeployParams tuple instead of loose args
   // ─────────────────────────────────────────────
-  'function deployStandardAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
-  'function deployProfessionalAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
-  'function deployEnterpriseAgent((uint256 monthlyPriceUSD,string avatarURI,string displayName,bytes32 dataCommitment,bytes sealedKey,bool commsEnabled,uint256 commsPricePerCallUSD,uint256 listingFeeUSD) params) payable returns (uint256)',
+  'function deployStandardAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
+  'function deployProfessionalAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
+  'function deployEnterpriseAgent(uint256 _monthlyPriceUSD,string _metadataURI,bool _commsEnabled,uint256 _commsPricePerCallUSD,uint256 _listingFeeUSD) payable returns (uint256)',
 
   // ─────────────────────────────────────────────
   // ACCESS / PAYMENTS — unchanged
@@ -240,10 +240,11 @@ class ContractManager {
   }
 
   // ─────────────────────────────────────────────
-  // DEPLOY AGENT — now takes a params object matching DeployParams struct
+  // DEPLOY AGENT — positional args, matches the deployed contract's real ABI
+  // (not the older struct-based signature — see AGENTRA_ABI above)
   // ─────────────────────────────────────────────
   async deployAgent(tier, params) {
-    // params: { monthlyPriceUSD, avatarURI, displayName, dataCommitment, sealedKey, commsEnabled, commsPricePerCallUSD, listingFeeUSD }
+    // params: { monthlyPriceUSD, metadataURI, commsEnabled, commsPricePerCallUSD, listingFeeUSD }
     if (this._mockMode) {
       return { success: true, txHash: `0xmock_deploy_${Date.now()}` }
     }
@@ -255,13 +256,20 @@ class ContractManager {
 
       const tierIndex = Number(tier)
       let tx
+      const args = [
+        params.monthlyPriceUSD,
+        params.metadataURI,
+        !!params.commsEnabled,
+        params.commsPricePerCallUSD,
+        params.listingFeeUSD,
+      ]
 
       if (tierIndex === 0) {
-        tx = await this.agentra.deployStandardAgent(params, { value: buffered })
+        tx = await this.agentra.deployStandardAgent(...args, { value: buffered })
       } else if (tierIndex === 1) {
-        tx = await this.agentra.deployProfessionalAgent(params, { value: buffered })
+        tx = await this.agentra.deployProfessionalAgent(...args, { value: buffered })
       } else {
-        tx = await this.agentra.deployEnterpriseAgent(params, { value: buffered })
+        tx = await this.agentra.deployEnterpriseAgent(...args, { value: buffered })
       }
 
       const receipt = await tx.wait(1)

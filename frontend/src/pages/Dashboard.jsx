@@ -225,9 +225,9 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="relative min-h-screen bg-[var(--color-bg)]">
+    <div className="relative min-h-screen bg-[var(--color-bg)] px-4 sm:px-6 lg:px-8 py-5 lg:py-8">
 
-      <div className="relative z-10 p-5 lg:p-8 max-w-7xl mx-auto">
+      <div className="relative z-10 max-w-7xl mx-auto">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-8">
           <p className="text-xs uppercase tracking-wide text-text-dim font-semibold">Directory</p>

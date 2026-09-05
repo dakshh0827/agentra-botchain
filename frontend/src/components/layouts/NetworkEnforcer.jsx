@@ -8,8 +8,8 @@ export default function NetworkEnforcer({ children }) {
   const { chain, isConnected } = useAccount()
   const { switchChain, isPending } = useSwitchChain()
 
-  const isUnsupported = isConnected && chain && !SUPPORTED_CHAINS.find((c) => c.id === chain.id)
   const targetChain = SUPPORTED_CHAINS[0]
+  const isUnsupported = isConnected && chain && chain.id !== targetChain.id
 
   return (
     <>

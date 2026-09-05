@@ -8,6 +8,7 @@ import {
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
 import { parseUnits, decodeEventLog } from 'viem'
 import { CHAIN_CONFIG } from '../config/chains.config'
+import { MIN_PRIORITY_FEE_WEI, MAX_FEE_PER_GAS_WEI } from '../config/custom-chains'
 import NeonButton from '../components/ui/NeonButton'
 import { agentsAPI } from '../api/agents'
 
@@ -298,251 +299,246 @@ export default function DeployStudio() {
     return hash
   }
 
-  const waitForReceiptWithRetry = async (hash, label, maxAttempts = 8) => {
+  // Deliberately does NOT use viem's publicClient.waitForTransactionReceipt: that helper
+  // also runs transaction-replacement detection (extra getTransaction/getBlock calls) any
+  // time the first poll misses, and its error surface doesn't match a fixed substring
+  // allowlist cleanly (observed: InvalidInputRpcError slipping past the old string match
+  // and aborting after a single attempt). Polling getTransactionReceipt directly and
+  // retrying on ANY failure removes that entire surface — we don't need replacement
+  // detection for this app's flow (nobody speeds-up/cancels these txs from the UI).
+  const waitForReceiptWithRetry = async (hash, label, maxAttempts = 20) => {
     let lastError = null
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        return await publicClient.waitForTransactionReceipt({
-          hash,
-          pollingInterval: 3000,
-          timeout: 180000,
-        })
+        const receipt = await publicClient.getTransactionReceipt({ hash })
+        if (receipt) return receipt
       } catch (error) {
         lastError = error
-        const message = String(error?.shortMessage || error?.message || '').toLowerCase()
-        const isTransientReceiptDelay =
-          message.includes('receipt') &&
-          (message.includes('could not be found') || message.includes('not be processed on a block yet') || message.includes('not found') || message.includes('timed out'))
+        console.warn(`[${label}] Receipt poll attempt ${attempt}/${maxAttempts} failed:`, error?.shortMessage || error?.message || error)
+      }
 
-        if (!isTransientReceiptDelay || attempt === maxAttempts) {
-          throw error
-        }
+      if (attempt === maxAttempts) break
+      await sleep(Math.min(12000, 1500 * attempt))
+    }
 
-        await sleep(Math.min(12000, 1500 * attempt))
+    throw lastError || new Error(`${label} receipt could not be found after ${maxAttempts} attempts`)
+  }
+
+const handleDeploy = async () => {
+  if (!isConnected) return
+
+  setDeploying(true)
+  setDeployError('')
+
+  let draftId = null
+
+  try {
+    // ─────────────────────────────────────────────
+    // 1. VALIDATION
+    // ─────────────────────────────────────────────
+    let parsedSchema = null
+    if (form.mcpSchema.trim()) {
+      try {
+        parsedSchema = JSON.parse(form.mcpSchema)
+      } catch {
+        throw new Error('Invalid MCP Schema JSON')
       }
     }
 
-    throw lastError || new Error(`${label} receipt could not be found`)
-  }
+    if (!form.monthlyPrice || parseFloat(form.monthlyPrice) < 0) {
+      throw new Error('Invalid monthly price')
+    }
 
-  const handleDeploy = async () => {
-    if (!isConnected) return
-    setDeploying(true)
-    setDeployError('')
-    let draftId = null
+    if (form.commsEnabled && (!form.commsPricePerCall || parseFloat(form.commsPricePerCall) <= 0)) {
+      throw new Error('Invalid comms price')
+    }
 
+    // ─────────────────────────────────────────────
+    // 2. PREPARE PAYLOAD
+    // ─────────────────────────────────────────────
+    const pricingWei = parseUnits(form.monthlyPrice || '0', 18).toString()
+
+    const payload = {
+      name: form.name,
+      category: form.category,
+      endpoint: form.endpoint,
+      mcpSchema: parsedSchema,
+      description: form.description,
+      tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
+      tier: form.tier,
+      pricing: pricingWei,
+      commsEnabled: !!form.commsEnabled,
+      commsPricePerCall: form.commsEnabled
+        ? parseUnits(form.commsPricePerCall || '0', 18).toString()
+        : '0',
+      deployMode: 'blockchain',
+      avatarUrl: form.avatarUrl || undefined,
+      intelligence: { systemPrompt: form.description || '' },
+    }
+
+    // ─────────────────────────────────────────────
+    // 3. NETWORK CHECK
+    // ─────────────────────────────────────────────
+    const currentNetwork = chain?.id ? CHAIN_CONFIG[chain.id] : null
+    if (!currentNetwork?.contracts?.Agentra) {
+      throw new Error('Agentra contract not configured for this network')
+    }
+
+    const { Agentra } = currentNetwork.contracts
+    const deployFunctionName = DEPLOY_FUNCTION_BY_TIER[selectedTier?.tier] || DEPLOY_FUNCTION_BY_TIER.Standard
+
+    // ─────────────────────────────────────────────
+    // 4. CREATE DRAFT
+    // ─────────────────────────────────────────────
+    console.log('💾 Creating draft...')
+    const draftRes = await agentsAPI.deploy(payload)
+
+    draftId = draftRes.data.id
+    const deployParams = draftRes.data.deployParams
+
+    if (!deployParams) {
+      throw new Error('Missing deploy params from backend')
+    }
+
+    // ─────────────────────────────────────────────
+    // 5. LISTING FEE
+    // ─────────────────────────────────────────────
+    const listingFeeUSDScaled = parseUnits(
+      String(selectedTier?.listingFeeUSD || '0'),
+      18
+    )
+
+    const requiredWei = await publicClient.readContract({
+      address: Agentra.address,
+      abi: Agentra.abi,
+      functionName: 'getRequiredWei',
+      args: [listingFeeUSDScaled],
+    })
+
+    const requiredWeiBN = BigInt(requiredWei)
+    const bufferedFee = requiredWeiBN + (requiredWeiBN / 50n) // +2%
+
+    // ─────────────────────────────────────────────
+    // 6. BUILD POSITIONAL ARGS — the deployed contract takes
+    // (uint256 monthlyPriceUSD, string metadataURI, bool commsEnabled,
+    //  uint256 commsPricePerCallUSD, uint256 listingFeeUSD), NOT a struct.
+    // Verified directly on-chain: the struct-shaped selector doesn't match
+    // any function; the positional selector reverts with the real, specific
+    // ERC721InvalidReceiver(address(0)) error, proving it routes into real
+    // mint logic. metadataURI is the actual uploaded JSON manifest URI
+    // (deployParams.metadataURI), not the avatar image URI.
+    // ─────────────────────────────────────────────
+    const monthlyPriceUSD = parseUnits(form.monthlyPrice || '0', 18)
+    const commsPriceUSD = form.commsEnabled
+      ? parseUnits(form.commsPricePerCall || '0', 18)
+      : 0n
+    const metadataURI = deployParams.metadataURI || deployParams.avatarURI
+
+    const deployArgs = [
+      monthlyPriceUSD,
+      metadataURI,
+      !!form.commsEnabled,
+      commsPriceUSD,
+      listingFeeUSDScaled,
+    ]
+
+    console.log('🧾 FINAL INPUT:')
+    console.log('args:', deployArgs)
+    console.log('value:', bufferedFee.toString())
+
+    // ─────────────────────────────────────────────
+    // 7. SIMULATION
+    // ─────────────────────────────────────────────
     try {
-      let parsedSchema = null
-      if (form.mcpSchema.trim()) {
-        try { parsedSchema = JSON.parse(form.mcpSchema) }
-        catch { throw new Error('Invalid MCP Schema JSON — please fix it before deploying.') }
-      }
+      console.log('🧪 Simulating contract call...')
 
-      if (!form.monthlyPrice || parseFloat(form.monthlyPrice) < 0) {
-        throw new Error('Please set a monthly access price (can be 0 for free).')
-      }
-
-      if (form.commsEnabled && (!form.commsPricePerCall || parseFloat(form.commsPricePerCall) <= 0)) {
-        throw new Error('Set a comms price per call greater than 0 0G when agent communication is enabled.')
-      }
-
-      // Monthly price in 0G-denominated units (stored as 18-decimal integers)
-      const pricingWei = parseUnits(form.monthlyPrice || '0', 18).toString()
-
-        const hasExecConfig =
-        form.executionConfig.headers.length > 0 ||
-        form.executionConfig.bodyFields.length > 0
-
-      const payload = {
-        name: form.name,
-        category: form.category,
-        endpoint: form.endpoint,
-        mcpSchema: parsedSchema,
-        description: form.description,
-        tags: form.tags.split(',').map(t => t.trim()).filter(Boolean),
-        tier: form.tier,
-        pricing: pricingWei,
-        commsEnabled: !!form.commsEnabled,
-        commsPricePerCall: form.commsEnabled
-          ? parseUnits(form.commsPricePerCall || '0', 18).toString()
-          : '0',
-        deployMode: form.deployMode,
-        executionConfig: hasExecConfig ? form.executionConfig : undefined,
-        // NEW — used by backend to build DeployParams
-        avatarUrl: form.avatarUrl || undefined,
-        intelligence: { systemPrompt: form.description || '' },
-      }
-
-      // ── DATABASE ONLY ──
-      if (!isBlockchain) {
-        await agentsAPI.deploy(payload)
-        setDeployed(true)
-        return
-      }
-
-      // ── BLOCKCHAIN + DB ──
-      const currentNetwork = chain?.id ? CHAIN_CONFIG[chain.id] : null
-      if (!currentNetwork?.contracts) {
-        throw new Error('Smart contracts not found for Zero Gravity Chain. Please reconnect on 0G.')
-      }
-
-      const { Agentra } = currentNetwork.contracts
-      if (!Agentra) {
-        throw new Error('Agentra contract not found for Zero Gravity Chain. Please reconnect on 0G.')
-      }
-
-      const selectedTierConfig = selectedTier || TIER_OPTIONS[0]
-      const deployFunctionName = DEPLOY_FUNCTION_BY_TIER[selectedTierConfig.tier] || DEPLOY_FUNCTION_BY_TIER.Standard
-
-      
-      // Step 1: Create DB draft — now also returns deployParams for the mint tx
-      console.log('💾 Creating database draft...')
-      const draftRes = await agentsAPI.deploy({ ...payload, deployMode: 'blockchain' })
-      draftId = draftRes.data.id
-      const deployParams = draftRes.data.deployParams
-      if (!deployParams) {
-        throw new Error('Backend did not return deploy parameters for the blockchain mint. Check server logs.')
-      }
-      console.log('✓ Draft created. Deploy params:', deployParams)
-
-      // Step 2: Get listing fee requirement
-      console.log('📋 Fetching listing fee requirement...')
-      console.log('  Requesting wei equivalent of USD:', selectedTierConfig.listingFeeUSD)
-
-      // Convert decimal USD to integer (multiply by 100 to preserve cents as integers for BigInt)
-      const listingFeeUSDAsInteger = Math.round(parseFloat(selectedTierConfig.listingFeeUSD) * 100)
-      console.log('  Converted to integer cents:', listingFeeUSDAsInteger)
-
-      const requiredWei = await publicClient.readContract({
+      await publicClient.simulateContract({
         address: Agentra.address,
         abi: Agentra.abi,
-        functionName: 'getRequiredWei',
-        args: [BigInt(listingFeeUSDAsInteger)],
+        functionName: deployFunctionName,
+        args: deployArgs,
+        value: bufferedFee,
+        account: walletAddress,
       })
-      if (!requiredWei) {
-        throw new Error('Failed to get listing fee. Please check contract is deployed.')
-      }
 
-      // Log raw value and type
-      console.log('  Raw requiredWei returned:', requiredWei, 'Type:', typeof requiredWei)
-      const requiredWeiBN = typeof requiredWei === 'bigint' ? requiredWei : BigInt(requiredWei)
-      console.log('  Converted to BigInt:', requiredWeiBN.toString())
-
-      // Add 2% buffer
-      const bufferPercent = requiredWeiBN / 50n // 2% = 1/50
-      const bufferedFee = requiredWeiBN + bufferPercent
-      console.log('✓ Listing fee calculated:')
-      console.log('  Base fee (wei):', requiredWeiBN.toString())
-      console.log('  2% buffer (wei):', bufferPercent.toString())
-      console.log('  Total fee to send (wei):', bufferedFee.toString())
-
-      // Step 3: Build the DeployParams struct — this is the new shape the contract expects
-      const monthlyPriceUSD = parseUnits(form.monthlyPrice || '0', 18)
-      const commsPriceUSD = form.commsEnabled
-        ? parseUnits(form.commsPricePerCall || '0', 18)
-        : 0n
-
-      const deployParamsStruct = {
-        monthlyPriceUSD,
-        avatarURI: deployParams.avatarURI,
-        displayName: deployParams.displayName,
-        dataCommitment: deployParams.dataCommitment,
-        sealedKey: deployParams.sealedKey,
-        commsEnabled: !!form.commsEnabled,
-        commsPricePerCallUSD: commsPriceUSD,
-        listingFeeUSD: BigInt(listingFeeUSDAsInteger),
-      }
-
-      console.log('🔐 Opening wallet for transaction approval...')
-      console.log('📝 Deploy params struct:', deployParamsStruct)
-
-      let deployTxHash = null
-      try {
-        console.log('⏳ Waiting for user to confirm in wallet...')
-        const deployTxResult = await writeContractAsync({
-          address: Agentra.address,
-          abi: Agentra.abi,
-          functionName: deployFunctionName,
-          args: [deployParamsStruct],
-          value: bufferedFee,
-        })
-
-        deployTxHash = typeof deployTxResult === 'string'
-          ? deployTxResult
-          : deployTxResult?.hash
-
-        if (!deployTxHash) {
-          throw new Error('Wallet: Transaction was initiated but hash not returned. Please check your wallet for details.')
-        }
-        console.log('✓ Transaction submitted to network:', deployTxHash)
-      } catch (walletError) {
-        const walletMsg = walletError?.shortMessage || walletError?.message || String(walletError)
-        console.error('❌ Wallet Error:', walletMsg)
-        if (walletMsg.toLowerCase().includes('user rejected') || walletMsg.toLowerCase().includes('denied') || walletMsg.toLowerCase().includes('cancelled')) {
-          throw new Error('You cancelled the transaction. Your draft has been saved and you can resume later.')
-        }
-        if (walletMsg.toLowerCase().includes('execution reverted') || walletMsg.toLowerCase().includes('reason:')) {
-          throw new Error(`Contract validation failed: ${walletMsg}`)
-        }
-        throw new Error(`Wallet error: ${walletMsg}`)
-      }
-
-      // Step 5: Wait for transaction to be mined
-      console.log('⏳ Waiting for transaction to be mined on blockchain...')
-      const receipt = await waitForReceiptWithRetry(deployTxHash, 'Deployment')
-      console.log('✓ Transaction confirmed on chain! Receipt:', receipt.blockNumber)
-
-      // Step 6: Parse AgentDeployed event
-      console.log('🔍 Parsing blockchain event...')
-      let contractAgentId = null
-      for (const log of receipt.logs) {
-        try {
-          const decoded = decodeEventLog({ abi: Agentra.abi, data: log.data, topics: log.topics })
-          if (decoded.eventName === 'AgentDeployed') {
-            contractAgentId = decoded.args.agentId?.toString()
-            console.log('✓ AgentDeployed event found! Contract Agent ID:', contractAgentId)
-            break
-          }
-        } catch { /* skip non-matching logs */ }
-      }
-
-      if (!contractAgentId) {
-        throw new Error('Transaction succeeded on-chain, but AgentDeployed event not emitted. Please contact support with tx hash: ' + deployTxHash)
-      }
-
-      // Step 7: Confirm deployment in backend
-      console.log('🔗 Confirming deployment in database...')
-      await agentsAPI.confirmDeploy(draftId, deployTxHash, contractAgentId)
-      console.log('✅ Deployment complete! Agent is live.')
-      setDeployed(true)
-
-    } catch (error) {
-      console.error('❌ Deploy pipeline error:', error)
-      const msg = error?.shortMessage || error?.message || String(error)
-      setDeployError(msg)
-      
-      // Only attempt rollback if we have a draft ID and a clear blockchain failure
-      if (draftId && isBlockchain) {
-        const shouldRollback = !msg.toLowerCase().includes('draft has been saved')
-        if (shouldRollback) {
-          console.log('🔄 Attempting to cancel draft...')
-          await agentsAPI.cancelDraft(draftId).catch(e => {
-            console.error('⚠️ Draft cancellation failed:', e)
-          })
-        }
-      }
-    } finally {
-      setDeploying(false)
+      console.log('✅ Simulation passed')
+    } catch (err) {
+      console.error('❌ Simulation failed:', err)
+      throw new Error(
+        err?.shortMessage ||
+        err?.message ||
+        'Simulation failed — contract will revert'
+      )
     }
+
+    // ─────────────────────────────────────────────
+    // 8. SEND TX
+    // ─────────────────────────────────────────────
+    console.log('🔐 Opening wallet...')
+
+    const txHash = await writeContractAsync({
+      address: Agentra.address,
+      abi: Agentra.abi,
+      functionName: deployFunctionName,
+      args: deployArgs,
+      value: bufferedFee,
+      maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+      maxFeePerGas: MAX_FEE_PER_GAS_WEI,
+    })
+
+    console.log('📤 TX:', txHash)
+
+    // ─────────────────────────────────────────────
+    // 9. WAIT FOR RECEIPT
+    // ─────────────────────────────────────────────
+    const receipt = await waitForReceiptWithRetry(txHash, 'Deployment')
+
+    if (receipt.status !== 'success') {
+      throw new Error(`Transaction reverted on-chain (tx: ${txHash}).`)
+    }
+
+    console.log('✅ Confirmed:', receipt.blockNumber)
+
+    // ─────────────────────────────────────────────
+    // 10. PARSE AgentDeployed EVENT + SYNC DB
+    // ─────────────────────────────────────────────
+    let contractAgentId = null
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({ abi: Agentra.abi, data: log.data, topics: log.topics })
+        if (decoded.eventName === 'AgentDeployed') {
+          contractAgentId = decoded.args.agentId?.toString()
+          break
+        }
+      } catch { /* skip non-matching logs */ }
+    }
+
+    if (!contractAgentId) {
+      throw new Error(`Transaction succeeded on-chain, but AgentDeployed event not emitted. Please contact support with tx hash: ${txHash}`)
+    }
+
+    await agentsAPI.confirmDeploy(draftId, txHash, contractAgentId)
+
+    setDeployed(true)
+
+  } catch (err) {
+    console.error('❌ Deploy error:', err)
+    setDeployError(err.message || 'Deployment failed')
+    if (draftId) {
+      await agentsAPI.cancelDraft(draftId).catch(e => console.error('⚠️ Draft cancellation failed:', e))
+    }
+  } finally {
+    setDeploying(false)
   }
+}
 
   const canProceedFromStep1 = !!form.deployMode && isConnected
   const canDeploy = isConnected && form.name && form.category && form.tier && form.monthlyPrice !== ''
 
   return (
-    <div className="relative min-h-screen bg-bg">
-      <div className="relative z-10 p-5 lg:p-8 max-w-7xl mx-auto">
+    <div className="relative min-h-screen bg-bg px-4 sm:px-6 lg:px-8 py-5 lg:py-8">
+      <div className="relative z-10 max-w-7xl mx-auto">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-8">
           {/* <div className="flex items-center gap-2.5 mb-3"> */}

@@ -22,7 +22,7 @@ export default function Sidebar() {
     <>
       {/* DESKTOP SIDEBAR */}
       <motion.aside
-        animate={{ width: collapsed ? 68 : 250 }}
+        animate={{ width: collapsed ? 88 : 325 }}
         transition={{ type: 'spring', stiffness: 260, damping: 28 }}
         className="hidden lg:flex flex-col h-screen z-20 overflow-hidden shrink-0 border-r border-border"
         style={{ background: 'var(--color-panel)' }}
@@ -79,7 +79,7 @@ export default function Sidebar() {
   {/* ICON (absolute stability) */}
   <div className="w-6 flex justify-center shrink-0">
     <Icon
-      size={16}
+      size={20}
       className={isActive ? 'text-primary' : 'text-text-dim'}
     />
   </div>
@@ -122,7 +122,7 @@ export default function Sidebar() {
               
               {/* ICON fixed */}
               <div className="w-5 flex justify-center shrink-0">
-                <Home size={16} className="text-text-dim" />
+                <Home size={20} className="text-text-dim" />
               </div>
 
               {/* TEXT */}

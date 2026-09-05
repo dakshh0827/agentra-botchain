@@ -10,6 +10,7 @@ import { parseUnits } from 'viem'
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { agentsAPI } from '../../api/agents'
 import { CHAIN_CONFIG } from '../../config/chains.config'
+import { MIN_PRIORITY_FEE_WEI, MAX_FEE_PER_GAS_WEI } from '../../config/custom-chains'
 import RuntimeExecutionForm from '../execution/Runtimeexecutionform'
 import OutputRenderer from './OutputRenderer'
 import buildBinaryDownload from '../../utils/buildBinaryDownload'
@@ -461,6 +462,8 @@ export default function AgentCommsPanel({ agentId, agentName, isOwner = false, c
         functionName: 'initiateAgentComms',
         args: [BigInt(source.contractAgentId), BigInt(target.contractAgentId)],
         value: buffered,
+        maxPriorityFeePerGas: MIN_PRIORITY_FEE_WEI,
+        maxFeePerGas: MAX_FEE_PER_GAS_WEI,
       })
       txHash = commsTx
 
