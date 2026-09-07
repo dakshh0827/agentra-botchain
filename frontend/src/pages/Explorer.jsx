@@ -21,7 +21,7 @@ import {
 import AgentAvatar from '../components/ui/AgentAvatar'
 import { Link } from 'react-router-dom'
 
-const CATEGORIES = ['all', 'Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']
+const CATEGORIES = ['All', 'Analysis', 'Development', 'Security', 'Data', 'NLP', 'Web3', 'Other']
 
 // FIXED: Cleaned up the sort options to only show Infrastructure metrics
 const SORT_OPTIONS = [
