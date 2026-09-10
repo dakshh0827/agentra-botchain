@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
 import {
   Upload, ChevronRight, Check, Globe, Tag, DollarSign,
   Zap, Database, Link2, Sparkles, Rocket, AlertTriangle, Wallet, Info,
-  Settings, Plus, Trash2, Eye, EyeOff, Lock, Key, FileText, Code
+  Settings, Plus, Trash2, Eye, EyeOff, Lock, Key, FileText, Code, Loader2
 } from 'lucide-react'
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
 import { parseUnits, decodeEventLog } from 'viem'
@@ -246,6 +247,15 @@ export default function DeployStudio() {
   const [deploying, setDeploying] = useState(false)
   const [deployed, setDeployed] = useState(false)
   const [deployError, setDeployError] = useState('')
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false)
+
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!deployed) return
+    const timeout = setTimeout(() => navigate('/explorer'), 2000)
+    return () => clearTimeout(timeout)
+  }, [deployed, navigate])
 
   const { chain, address: walletAddress, isConnected } = useAccount()
   const publicClient = usePublicClient()
@@ -489,6 +499,7 @@ const handleDeploy = async () => {
     })
 
     console.log('📤 TX:', txHash)
+    setAwaitingConfirmation(true)
 
     // ─────────────────────────────────────────────
     // 9. WAIT FOR RECEIPT
@@ -531,6 +542,7 @@ const handleDeploy = async () => {
     }
   } finally {
     setDeploying(false)
+    setAwaitingConfirmation(false)
   }
 }
 
@@ -1096,6 +1108,22 @@ const handleDeploy = async () => {
           </FadeInSection>
         )}
       </div>
+
+      <AnimatePresence>
+        {awaitingConfirmation && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-bg/70 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 size={32} className="text-primary animate-spin" />
+              <p className="text-sm text-text-secondary font-mono">Confirming deployment on-chain...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
