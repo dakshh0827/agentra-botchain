@@ -107,6 +107,7 @@ model Agent {
 
   contractAgentId Int?
   txHash          String?
+  chainId         Int           @default(16602) // Add this! Default to your old 0G chain ID
 
   name            String        @unique
   description     String?

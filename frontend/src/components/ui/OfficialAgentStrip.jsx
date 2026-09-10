@@ -1,41 +1,24 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAccount } from 'wagmi'
-import { LayoutGrid, ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
 import { agentsAPI } from '../../api/agents'
 import { getAgentExternalId } from '../../utils/helpers'
 import { EXPLORER_CACHE_TTL_MS, ttlCached, ttlGet, ttlHas } from '../../utils/ttlCache'
 import {
   detailsBtnClass,
-  tryBtnClass,
-  featuresBtnClass,
   agentCardShellClass,
 } from '../../utils/agentCardChrome'
 import AgentAvatar from './AgentAvatar'
-import TryAgentModal from './TryAgentModal'
-import AgentPreviewModal from './AgentPreviewModal'
 
-function CardActions({ id, agent, isConnected, onTry }) {
+function CardActions({ id }) {
   return (
     <div className="flex items-center justify-end gap-2 pt-4 border-t border-[#ebe3f4]">
-      <Link to={`/agent/${id}`} className={detailsBtnClass}>
+      <Link to={`/agent/${id}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white font-medium text-xs hover:bg-primary/90 transition-colors shadow-sm">
         Details
         <ArrowUpRight size={12} />
       </Link>
-      <button
-        type="button"
-        onClick={() => onTry?.(agent)}
-        className={isConnected ? tryBtnClass : featuresBtnClass}
-      >
-        {isConnected ? (
-          'Try now →'
-        ) : (
-          <>
-            <LayoutGrid size={12} /> Features
-          </>
-        )}
-      </button>
     </div>
   )
 }
@@ -44,9 +27,15 @@ function CardActions({ id, agent, isConnected, onTry }) {
  * Same chrome as Explorer marketplace cards — fonts, padding, footer actions —
  * so official agents do not look like a different product.
  */
-function OfficialCard({ agent, variant, index, onTry, isConnected }) {
+function OfficialCard({ agent, variant, index }) {
+  const navigate = useNavigate()
   const isHero = variant === 'hero'
   const id = getAgentExternalId(agent)
+
+  const handleCardClick = (e) => {
+    if (e.target.closest('a')) return
+    navigate(`/agent/${id}`)
+  }
 
   if (isHero) {
     return (
@@ -56,7 +45,10 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
         transition={{ delay: index * 0.06, duration: 0.3 }}
         className="h-full"
       >
-        <div className={`${agentCardShellClass} border-[#d9c2f2]`}>
+        <div 
+          onClick={handleCardClick}
+          className={`${agentCardShellClass} border-[#d9c2f2] cursor-pointer hover:border-primary/50 transition-colors`}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="shrink-0 rounded-[13px] shadow-[0_3px_10px_rgba(111,53,178,0.30)]">
               <AgentAvatar agent={agent} size={52} />
@@ -76,7 +68,7 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
           <p className="mt-2.5 text-sm leading-relaxed text-text-secondary flex-1 line-clamp-3">
             {agent.description || 'No description provided.'}
           </p>
-          <CardActions id={id} agent={agent} isConnected={isConnected} onTry={onTry} />
+          <CardActions id={id} />
         </div>
       </motion.div>
     )
@@ -87,12 +79,8 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, duration: 0.3 }}
-      onClick={(e) => {
-        if (isConnected) return
-        if (e.target.closest('a, button')) return
-        onTry?.(agent)
-      }}
-      className={`${agentCardShellClass} ${!isConnected ? 'cursor-pointer' : ''}`}
+      onClick={handleCardClick}
+      className={`${agentCardShellClass} cursor-pointer hover:border-primary/50 transition-colors`}
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#c9a8f0] to-transparent opacity-80" />
       <div className="absolute top-0 right-0 w-20 h-20 bg-primary/[0.06] rounded-bl-full pointer-events-none group-hover:bg-primary/10 transition-colors" />
@@ -131,7 +119,7 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
         <p className="text-xs text-text-primary opacity-80">Built and run by Agentra</p>
       </div>
 
-      <CardActions id={id} agent={agent} isConnected={isConnected} onTry={onTry} />
+      <CardActions id={id} />
     </motion.div>
   )
 }
@@ -142,7 +130,6 @@ function OfficialCard({ agent, variant, index, onTry, isConnected }) {
  * `hero` is the landing-page section, `compact` sits above the Explorer grid.
  */
 export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
-  const { isConnected } = useAccount()
   const cacheKey = `agents:official:${limit}`
   const hasCache = ttlHas(cacheKey)
   const [agents, setAgents] = useState(() => {
@@ -151,7 +138,6 @@ export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
     return Array.isArray(cached) ? cached : []
   })
   const [isLoading, setLoading] = useState(() => !hasCache)
-  const [tryAgent, setTryAgent] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -191,11 +177,6 @@ export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
               isHero ? 'text-2xl md:text-3xl' : 'text-base',
             ].join(' ')}
           >
-            {/* {!isHero && (
-              <span className="w-5 h-5 rounded-md bg-gradient-to-br from-[#AC64F7] to-[#6F35B2] inline-flex items-center justify-center">
-                <BadgeCheck size={12} className="text-white" />
-              </span>
-            )} */}
             {isHero ? 'Agents we built and run' : 'Built by Agentra'}
           </h2>
           <p className={['text-text-muted mt-1', isHero ? 'text-sm' : 'text-xs'].join(' ')}>
@@ -223,22 +204,9 @@ export default function OfficialAgentStrip({ variant = 'compact', limit = 4 }) {
             agent={agent}
             variant={variant}
             index={index}
-            onTry={setTryAgent}
-            isConnected={isConnected}
           />
         ))}
       </div>
-
-      <TryAgentModal
-        agent={tryAgent}
-        open={!!tryAgent && isConnected}
-        onClose={() => setTryAgent(null)}
-      />
-      <AgentPreviewModal
-        agent={tryAgent}
-        open={!!tryAgent && !isConnected}
-        onClose={() => setTryAgent(null)}
-      />
     </section>
   )
 }

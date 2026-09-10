@@ -1,18 +1,21 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAccount } from 'wagmi'
-import { Activity, ArrowUpRight, Shield, Star, TrendingUp, Zap, ChevronDown, ExternalLink, LayoutGrid } from 'lucide-react'
+import { Activity, ArrowUpRight, Shield, Star, TrendingUp, Zap, ChevronDown, ExternalLink } from 'lucide-react'
 import { formatUnits } from 'viem'
 import { getAgentExternalId } from '../../utils/helpers'
 import {
   detailsBtnClass,
-  tryBtnClass,
-  featuresBtnClass,
   agentCardShellClass,
 } from '../../utils/agentCardChrome'
-import TryAgentModal from './TryAgentModal'
-import AgentPreviewModal from './AgentPreviewModal'
+
+const CHAIN_INFO = {
+  16602: { name: '0G Testnet', symbol: 'A0GI' },
+  16661: { name: '0G Mainnet', symbol: '0G' },
+  968: { name: 'BotChain Testnet', symbol: 'tBOT' },
+  677: { name: 'BotChain Mainnet', symbol: 'BOT' }
+}
 
 const categoryTone = {
   Analysis: { bg: '#e8f0fb', text: '#486c97', border: '#c4d7ee' },
@@ -36,12 +39,18 @@ function formatPricing(pricing) {
 }
 
 export default function AgentCard({ agent, index = 0 }) {
-  const { isConnected } = useAccount()
+  const navigate = useNavigate()
   const tone = categoryTone[agent.category] || categoryTone.Other
   const displayId = getAgentExternalId(agent)
   const isOnChain = !!agent.contractAgentId
   const [isHovered, setIsHovered] = React.useState(false)
-  const [tryOpen, setTryOpen] = React.useState(false)
+  const agentChainId = agent.chainId || 16602;
+  const chainData = CHAIN_INFO[agentChainId] || CHAIN_INFO[16602];
+
+  const handleCardClick = (e) => {
+    if (e.target.closest('a')) return
+    navigate(`/agent/${displayId}`)
+  }
 
   return (
     <motion.div
@@ -53,7 +62,8 @@ export default function AgentCard({ agent, index = 0 }) {
       <div
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className={`${agentCardShellClass} px-4 py-4`}
+        onClick={handleCardClick}
+        className={`${agentCardShellClass} px-4 py-4 cursor-pointer hover:border-primary/50 transition-colors`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -70,15 +80,15 @@ export default function AgentCard({ agent, index = 0 }) {
                   {agent.category}
                 </span>
                 {isOnChain ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#d9b6c9] bg-accent-pink text-primary inline-flex items-center gap-1">
-                    <Shield size={9} /> Chain
-                  </span>
-                ) : null}
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#d9b6c9] bg-accent-pink text-primary inline-flex items-center gap-1">
+                      <Shield size={9} /> {chainData.name}
+                    </span>
+                  ) : null}
               </div>
             </div>
           </div>
 
-          <Link to={`/agent/${displayId}`} className={`${detailsBtnClass} !px-2.5 !py-1.5 text-[11px]`}>
+          <Link to={`/agent/${displayId}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-white font-medium text-xs hover:bg-primary/90 transition-colors shadow-sm">
             Details
             <ArrowUpRight size={11} />
           </Link>
@@ -111,21 +121,8 @@ export default function AgentCard({ agent, index = 0 }) {
 
         <div className="mt-3 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold text-primary">
-            {formatPricing(agent.pricing)} 0G <span className="text-[11px] text-text-dim font-medium">/ month</span>
+            {formatPricing(agent.pricing)} {chainData.symbol} <span className="text-[11px] text-text-dim font-medium">/ month</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setTryOpen(true)}
-            className={isConnected ? `${tryBtnClass} !px-2.5 !py-1.5 text-[11px]` : `${featuresBtnClass} !px-2.5 !py-1.5 text-[11px]`}
-          >
-            {isConnected ? (
-              'Try now →'
-            ) : (
-              <>
-                <LayoutGrid size={11} /> Features
-              </>
-            )}
-          </button>
         </div>
 
         <AnimatePresence mode="wait">
@@ -173,17 +170,6 @@ export default function AgentCard({ agent, index = 0 }) {
           )}
         </AnimatePresence>
       </div>
-
-      <TryAgentModal
-        agent={agent}
-        open={tryOpen && isConnected}
-        onClose={() => setTryOpen(false)}
-      />
-      <AgentPreviewModal
-        agent={agent}
-        open={tryOpen && !isConnected}
-        onClose={() => setTryOpen(false)}
-      />
     </motion.div>
   )
 }

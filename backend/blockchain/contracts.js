@@ -1,6 +1,12 @@
 // backend/blockchain/contracts.js
 import { ethers } from 'ethers'
 import config from '../config/config.js'
+const RPC_URLS = {
+  16602: 'https://evmrpc-testnet.0g.ai',
+  16661: 'https://evmrpc.0g.ai',
+  968: 'https://rpc.bohr.life',
+  677: 'https://rpc.botchain.ai',
+}
 
 // ─────────────────────────────────────────────
 // AGENTRA ABI (ERC-7857 / V2)
@@ -372,16 +378,37 @@ class ContractManager {
     }
   }
 
-  async isTransactionConfirmed(txHash) {
+ // Helper to dynamically get or cache the provider for any chain
+  getProvider(chainId) {
+    const url = RPC_URLS[chainId] || config.blockchain.rpcUrl || 'https://rpc.bohr.life'
+    if (!this._providers) this._providers = {}
+    if (!this._providers[url]) {
+      this._providers[url] = new ethers.JsonRpcProvider(url)
+    }
+    return this._providers[url]
+  }
+
+  async isTransactionConfirmed(txHash, chainId = null) {
     if (!txHash || typeof txHash !== 'string') return false
     if (this._mockMode) return true
-    if (!this.provider) return false
-    try {
-      const receipt = await this.provider.getTransactionReceipt(txHash)
-      return !!(receipt && receipt.status === 1)
-    } catch {
-      return false
+
+    // Select the provider based on the chain where the agent lives
+    const provider = chainId ? this.getProvider(chainId) : (this.provider || this.getProvider(677))
+    if (!provider) return false
+
+    // Retry up to 5 times (polling every 2s) to account for block minting latency
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const receipt = await provider.getTransactionReceipt(txHash)
+        if (receipt && receipt.status === 1) {
+          return true
+        }
+      } catch (err) {
+        // Ignore transient network errors while polling
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000))
     }
+    return false
   }
 
   async waitForTransactionConfirmation(txHash, { timeoutMs = 120000, pollIntervalMs = 4000 } = {}) {

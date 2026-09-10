@@ -18,6 +18,12 @@ import { resolveCapabilities } from '../services/capabilitiesService.js'
 const AGENTRA_CONFIRM_EVENT_ABI = [
   'event AgentDeployed(uint256 indexed agentId, address indexed creator, uint8 tier, uint256 listingFeePaidUSD)',
 ]
+const RPC_URLS = {
+  16602: 'https://evmrpc-testnet.0g.ai',
+  16661: 'https://evmrpc.0g.ai',
+  968: 'https://rpc.bohr.life',
+  677: 'https://rpc.botchain.ai'
+}
 
 const agentraEventInterface = new ethers.Interface(AGENTRA_CONFIRM_EVENT_ABI)
 
@@ -118,7 +124,7 @@ const deployAgent = asyncHandler(async (req, res) => {
   await ensureUniqueAgentName(data.name)
 
   const encryptedExecutionConfig = encryptExecutionConfigSecrets(data.executionConfig)
-
+  
   
   const capabilities = await resolveCapabilities({
     declared: data.capabilities,
@@ -171,6 +177,7 @@ const deployAgent = asyncHandler(async (req, res) => {
     const agent = await prisma.agent.create({
       data: {
       name: data.name,
+      chainId: req.body.chainId || 16602, // Save the chain ID
       description: data.description,
       metadataUri: metadataURI,
       ownerWallet: req.walletAddress,
@@ -253,7 +260,7 @@ const deployAgent = asyncHandler(async (req, res) => {
 
 // ── CONFIRM DEPLOY (SYNC CONTRACT ID) ──────────────────────────
 const confirmDeploy = asyncHandler(async (req, res) => {
-  const { contractAgentId, txHash } = req.body
+  const { contractAgentId, txHash, chainId } = req.body
   const { id } = req.params
 
   if (!txHash) {
@@ -265,20 +272,19 @@ const confirmDeploy = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'contractAgentId is required and must be a valid non-negative integer' })
   }
 
-  const confirmed = await contractManager.isTransactionConfirmed(txHash)
+  const targetChainId = chainId || 677
+
+  const confirmed = await contractManager.isTransactionConfirmed(txHash, targetChainId)
   if (!confirmed) {
     return res.status(400).json({ error: 'Provided txHash is not confirmed on-chain' })
   }
 
-  if (!config.blockchain.rpcUrl) {
-    return res.status(500).json({ error: 'Blockchain RPC URL is not configured' })
-  }
-
-  const provider = new ethers.JsonRpcProvider(config.blockchain.rpcUrl)
+  const provider = contractManager.getProvider(targetChainId)
   const receipt = await provider.getTransactionReceipt(txHash)
   if (!receipt || receipt.status !== 1) {
     return res.status(400).json({ error: 'Provided txHash did not produce a successful on-chain receipt' })
   }
+  // ... rest remains unchanged
 
   let deployedEvent = null
   for (const log of receipt.logs) {
@@ -323,6 +329,7 @@ const confirmDeploy = asyncHandler(async (req, res) => {
       contractAgentId: parsedContractAgentId,
       txHash,
       isVerified: true,
+      chainId: targetChainId // <--- ADD THIS LINE!
     },
   })
 
@@ -377,7 +384,7 @@ const cancelDraft = asyncHandler(async (req, res) => {
 // ── PURCHASE ACCESS ────────────────────────────────────────────
 const purchaseAccess = asyncHandler(async (req, res) => {
   const { agentId } = req.params
-  const { isLifetime, txHash } = req.body
+  const { isLifetime, txHash, chainId } = req.body
 
   const agent = await prisma.agent.findFirst({ where: buildAgentLookup(agentId) })
   if (!agent) return res.status(404).json({ error: 'Agent not found' })
@@ -390,7 +397,10 @@ const purchaseAccess = asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'txHash required: purchase must be processed by wallet first' })
   }
 
-  const confirmed = await contractManager.isTransactionConfirmed(txHash)
+  // Determine the target chain (reads 968 for your BotChain agents)
+  const targetChainId = agent.chainId || chainId || 677
+
+  const confirmed = await contractManager.isTransactionConfirmed(txHash, targetChainId)
   if (!confirmed) {
     return res.status(400).json({ error: 'Provided txHash is not confirmed on-chain' })
   }

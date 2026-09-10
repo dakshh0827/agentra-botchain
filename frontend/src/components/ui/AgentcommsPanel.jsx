@@ -78,7 +78,7 @@ function DiscoveryResult({ agent, onSelect, selected }) {
         <div className="text-xs font-mono text-text-dim flex items-center gap-2">
           <span className="text-primary">{agent.category}</span>
           <span>·</span>
-          <span>{formatWeiToAgt(agent.commsPricePerCall)} 0G/call</span>
+          <span>{formatWeiToAgt(agent.commsPricePerCall)} token/call</span>
           <span>·</span>
           <span className="text-success">{agent.successRate}%</span>
         </div>
@@ -158,15 +158,15 @@ function CallResultDisplay({ result }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono">
           <div className="rounded-lg p-2 bg-bg-secondary border border-border">
             <div className="text-text-dim text-xs">CHARGED</div>
-            <div className="text-primary">{formatWeiToAgt(billing?.chargedWei)} 0G</div>
+            <div className="text-primary">{formatWeiToAgt(billing?.chargedWei)} token</div>
           </div>
           <div className="rounded-lg p-2 bg-bg-secondary border border-border">
             <div className="text-text-dim text-xs">CREATOR</div>
-            <div className="text-success">{formatWeiToAgt(billing?.creatorAmountWei)} 0G</div>
+            <div className="text-success">{formatWeiToAgt(billing?.creatorAmountWei)} token</div>
           </div>
           <div className="rounded-lg p-2 bg-bg-secondary border border-border">
             <div className="text-text-dim text-xs">PLATFORM</div>
-            <div className="text-text-secondary">{formatWeiToAgt(billing?.platformFeeWei)} 0G</div>
+            <div className="text-text-secondary">{formatWeiToAgt(billing?.platformFeeWei)} token</div>
           </div>
         </div>
       </div>
@@ -347,7 +347,7 @@ export default function AgentCommsPanel({ agentId, agentName, isOwner = false, c
     if (savingConfig) return
 
     if (ownerCommsEnabled && (!ownerCommsPrice || Number(ownerCommsPrice) <= 0)) {
-      setError('Comms price must be greater than 0 0G when enabled')
+      setError('Comms price must be greater than 0 token when enabled')
       return
     }
 
@@ -570,7 +570,7 @@ export default function AgentCommsPanel({ agentId, agentName, isOwner = false, c
                 </div>
                 {ownerCommsEnabled && (
                   <div>
-                    <label className="text-xs font-mono text-text-dim uppercase block mb-2">PRICE PER CALL (0G)</label>
+                    <label className="text-xs font-mono text-text-dim uppercase block mb-2">PRICE PER CALL (TOKEN)</label>
                     <input
                       type="number"
                       min="0"

@@ -166,7 +166,7 @@ function DbPurchasePanel({ agent, onSuccess, pendingTx }) {
     isPurchasing={isPurchasing}
     pendingTx={pendingTx}
     error={error || (notOnChain ? 'Agent not registered on-chain — confirm deploy first (missing contractAgentId).' : '')}
-    currency="0G"
+    currency="token"
     purchaseDisabled={notOnChain}
   />
 }
@@ -277,7 +277,7 @@ function BlockchainPurchasePanel({ agent, onSuccess, pendingTx }) {
     isPurchasing={isPurchasing}
     pendingTx={pendingTx}
     error={error}
-    currency="0G"
+    currency="token"
   />
 }
 
@@ -320,7 +320,7 @@ function PurchasePanelUI({ purchaseType, setPurchaseType, monthlyEth, yearlyEth,
             className={`p-4 rounded-xl border text-center transition-all cursor-pointer ${purchaseType === opt.id ? opt.color === 'purple' ? 'bg-[rgba(124,58,237,0.15)] border-[var(--color-primary)]' : 'bg-[rgba(52,211,153,0.15)] border-[var(--color-success)]' : 'border-[var(--color-border)] bg-black/20'}`}>
             <div className="text-sm font-mono text-[var(--color-text-dim)] mb-2">{opt.label}</div>
             <div className={`text-xl font-bold font-display ${opt.color === 'purple' ? 'text-[var(--color-primary)]' : 'text-[var(--color-success)]'}`}>
-              {opt.price} <span className="text-xs">0G</span>
+              {opt.price} <span className="text-xs">token</span>
             </div>
           </motion.button>
         ))}
@@ -1117,7 +1117,7 @@ console.log('========================================\n')
                 <div className="flex flex-wrap items-center gap-4 text-sm font-mono text-[var(--color-text-dim)]">
                   <span>OWNER: <span className="text-[var(--color-primary)]">{agent.ownerWallet?.slice(0, 12) || '0xUNKNOWN'}...</span></span>
                   <span>CATEGORY: <span className="text-[var(--color-text-muted)]">{agent.category || 'N/A'}</span></span>
-                  <span>MONTHLY: <span className="text-[var(--color-primary)]">{monthlyEth} 0G</span></span>
+                  <span>MONTHLY: <span className="text-[var(--color-primary)]">{monthlyEth} token</span></span>
                 </div>
               </div>
             </div>
@@ -1142,7 +1142,7 @@ console.log('========================================\n')
               { label: 'RATING', value: `${agent.rating || 0}/5.0`, color: 'yellow', icon: Star },
               { label: 'TOTAL CALLS', value: (agent.calls || 0).toLocaleString(), color: 'blue', icon: Activity },
               { label: 'SUCCESS RATE', value: `${agent.successRate || 0}%`, color: 'green', icon: TrendingUp },
-              { label: 'MONTHLY PRICE', value: `${monthlyEth} 0G`, color: 'purple', icon: Shield },
+              { label: 'MONTHLY PRICE', value: `${monthlyEth} token`, color: 'purple', icon: Shield },
             ].map((m, i) => (
               <motion.div key={m.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + i * 0.05 }}>
                 <div className="glass-card-landing rounded-xl p-4 sm:p-5"><MetricBadge {...m} /></div>

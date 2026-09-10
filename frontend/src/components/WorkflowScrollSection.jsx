@@ -72,7 +72,7 @@ const WORKFLOW_STEPS = [
   {
     id: 'mint', title: 'Mint iNFT', Icon: IconMint,
     desc: 'ERC-7857 mints immutable on-chain ownership.',
-    points: ['Provenance recorded on 0G Chain', 'Ownership is transferable & verifiable', 'No black-box logic — fully auditable'],
+    points: ['Provenance recorded on Chain', 'Ownership is transferable & verifiable', 'No black-box logic — fully auditable'],
   },
   {
     id: 'route', title: 'Route', Icon: IconRoute,
@@ -86,7 +86,7 @@ const WORKFLOW_STEPS = [
   },
   {
     id: 'settle', title: 'Settle', Icon: IconSettle,
-    desc: '0G network meters usage and clears funds.',
+    desc: 'Web3 network meters usage and clears funds.',
     points: ['Pay-per-call billing, no subscriptions', 'Creators paid automatically', 'Full usage history on Dashboard'],
   },
 ]

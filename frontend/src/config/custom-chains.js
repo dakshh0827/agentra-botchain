@@ -1,3 +1,5 @@
+// frontend/src/config/custom-chains.js
+
 export const zeroGTestnet = {
   id: 16602,
   name: '0G Testnet',
@@ -10,14 +12,9 @@ export const zeroGTestnet = {
   },
 }
 
-// 0G Mainnet enforces a ~2 gwei minimum priority fee (tip); wallets' own gas
-// estimators (e.g. MetaMask) often suggest less, so every write call must
-// pass this explicitly. Pinning exactly at the observed 2e9 floor still got
-// rejected (RPC error showed tip cap == minimum needed == 2000000000), so
-// this carries headroom rather than chasing the exact boundary — base fee
-// here is negligible (~7 wei), so overpay risk from the buffer is minimal.
-export const MIN_PRIORITY_FEE_WEI = 3_000_000_000n
-export const MAX_FEE_PER_GAS_WEI = 3_000_000_000n
+// Update these constants to satisfy BotChain's 20 Gwei minimum requirement
+export const MIN_PRIORITY_FEE_WEI = 20_000_000_000n; // 20 Gwei
+export const MAX_FEE_PER_GAS_WEI =  25_000_000_000n; // 25 Gwei (gives headroom)
 
 export const zeroGMainnet = {
   id: 16661,
@@ -28,5 +25,29 @@ export const zeroGMainnet = {
   },
   blockExplorers: {
     default: { name: '0G Explorer', url: 'https://chainscan.0g.ai' },
+  },
+}
+
+export const botchainTestnet = {
+  id: 968,
+  name: 'BotChain Testnet',
+  nativeCurrency: { name: 'BOT', symbol: 'BOT', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://rpc.bohr.life'] },
+  },
+  blockExplorers: {
+    default: { name: 'BotChain Explorer', url: 'https://scan.bohr.life' },
+  },
+}
+
+export const botchainMainnet = {
+  id: 677,
+  name: 'BotChain Mainnet',
+  nativeCurrency: { name: 'BOT', symbol: 'BOT', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://rpc.botchain.ai'] },
+  },
+  blockExplorers: {
+    default: { name: 'BotChain Explorer', url: 'https://scan.botchain.ai' },
   },
 }

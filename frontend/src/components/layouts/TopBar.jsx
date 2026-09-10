@@ -217,7 +217,7 @@ export default function TopBar() {
             </span>
             {tokenBalance !== undefined && (
               <span className="hidden sm:inline text-xs font-mono font-bold text-text-primary pl-2.5 border-l border-primary/20">
-                {Number(formatUnits(tokenBalance, 18)).toFixed(2)} 0G
+                {Number(formatUnits(tokenBalance, 18)).toFixed(2)} chain
               </span>
             )}
             <ChevronDown size={12} className="text-text-dim" />

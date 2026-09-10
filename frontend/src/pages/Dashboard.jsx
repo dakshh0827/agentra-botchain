@@ -218,7 +218,7 @@ export default function Dashboard() {
   const revenueAxisMax = maxRevenuePoint > 0 ? maxRevenuePoint * 1.25 : 1
 
   const metricCards = [
-    { label: 'TOTAL REVENUE', value: `${totalRevenue.toFixed(4)} 0G`, color: 'green', icon: DollarSign, sublabel: 'All time earnings' },
+    { label: 'TOTAL REVENUE', value: `${totalRevenue.toFixed(4)} token`, color: 'green', icon: DollarSign, sublabel: 'All time earnings' },
     { label: 'TOTAL CALLS', value: totalCalls.toLocaleString(), color: 'blue', icon: Activity, sublabel: 'Total executions' },
     { label: 'MY AGENTS', value: myAgents.length, color: 'purple', icon: Zap, sublabel: 'Deployed on network' },
     { label: 'TOTAL PURCHASES', value: totalPurchases.toLocaleString(), color: 'yellow', icon: ShieldCheck, sublabel: 'Unique buyer unlocks' },
@@ -259,7 +259,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="font-display font-bold text-[var(--color-text-primary)] text-base sm:text-lg">Revenue Chart</h3>
-                  <p className="text-[var(--color-text-dim)] text-sm font-mono tracking-wider mt-0.5">0G EARNINGS OVER TIME</p>
+                  <p className="text-[var(--color-text-dim)] text-sm font-mono tracking-wider mt-0.5">TOKEN EARNINGS OVER TIME</p>
                 </div>
               </div>
               {revenueData.length > 0 ? (
@@ -276,7 +276,7 @@ export default function Dashboard() {
                       tick={{ fontSize: 10, fontFamily: 'Space Mono', fill: 'var(--color-text-dim)' }}
                     />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area type="monotone" dataKey="eth" stroke="#a855f7" strokeWidth={2} fill="rgba(168,85,247,0.12)" name="0G" />
+                    <Area type="monotone" dataKey="eth" stroke="#a855f7" strokeWidth={2} fill="rgba(168,85,247,0.12)" name="token" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -383,7 +383,7 @@ export default function Dashboard() {
                   <YAxis stroke="rgba(124,58,237,0.3)" tick={{ fontSize: 10, fontFamily: 'Space Mono', fill: 'var(--color-text-dim)' }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Bar dataKey="calls" fill="rgba(124,58,237,0.5)" stroke="#7c3aed" strokeWidth={1} radius={[4, 4, 0, 0]} name="Calls" />
-                  <Bar dataKey="revenue" fill="rgba(52,211,153,0.4)" stroke="#34d399" strokeWidth={1} radius={[4, 4, 0, 0]} name="Revenue (0G)" />
+                  <Bar dataKey="revenue" fill="rgba(52,211,153,0.4)" stroke="#34d399" strokeWidth={1} radius={[4, 4, 0, 0]} name="Revenue (token)" />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

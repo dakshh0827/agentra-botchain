@@ -796,7 +796,7 @@ export default function TryAgentModal({ agent, open, onClose }) {
                       </h3>
                       <p className="text-xs text-[var(--color-text-muted)] mt-2 leading-relaxed">
                         Browse features freely. Running audits, chat history, and purchases need a
-                        connected wallet on 0G.
+                        connected wallet on.
                       </p>
                       <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
                         <button

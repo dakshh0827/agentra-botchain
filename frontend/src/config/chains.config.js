@@ -1,14 +1,14 @@
-import { zeroGTestnet, zeroGMainnet } from './custom-chains'
+// frontend/src/config/chains.config.js
+import { botchainMainnet } from './custom-chains'
 import deployments from '../deployments.json'
 
 const deploymentMap = Array.isArray(deployments)
   ? Object.assign({}, ...deployments)
   : deployments
 
-// Wagmi supports both Zero Gravity chains. Mainnet is first = default/enforced chain.
-export const SUPPORTED_CHAINS = [zeroGMainnet, zeroGTestnet]
+// Only expose BotChain Mainnet to the users for now
+export const SUPPORTED_CHAINS = [botchainMainnet]
 
-// Dynamic lookup map for all supported chains.
 export const CHAIN_CONFIG = SUPPORTED_CHAINS.reduce((acc, chain) => {
   acc[chain.id] = {
     chain,
@@ -16,3 +16,6 @@ export const CHAIN_CONFIG = SUPPORTED_CHAINS.reduce((acc, chain) => {
   }
   return acc
 }, {})
+
+// Set the default to 677
+export const DEFAULT_CHAIN_ID = botchainMainnet.id
