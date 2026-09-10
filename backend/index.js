@@ -46,6 +46,8 @@ app.use(
       'http://localhost:5174',
       'https://www.agentra.live',
       'https://agentra.live',
+      'https://www.agentra69.in',
+      'https://agentra-botchain.vercel.app',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
