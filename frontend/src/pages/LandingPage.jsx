@@ -134,7 +134,7 @@ const SVGDeployStudio = () => (
     <circle cx="38" cy="34" r="5" fill="#f4a8b8" />
     <circle cx="54" cy="34" r="5" fill="#f8d080" />
     <circle cx="70" cy="34" r="5" fill="#a8d8b0" />
-    <text x="155" y="38" fontSize="9" textAnchor="middle" dominantBaseline="middle" fill="#9080b0">deploy-studio — agentra</text>
+    <text x="155" y="38" fontSize="9" textAnchor="middle" dominantBaseline="middle" fill="#9080b0">deploy-studio - agentra</text>
     {/* Code lines */}
     {[
       { y: 66, w: 140, c: '#c8a8e8', text: '$ agentra deploy ./my-agent' },
@@ -994,7 +994,7 @@ export default function LandingPage() {
             <div className="absolute inset-0 dot-grid opacity-50 pointer-events-none" />
             
             <div className="relative z-10">
-              <p className="text-xs uppercase tracking-widest text-primary font-semibold mb-3">Web3 Network Infrastructure</p>
+              <p className="text-xs uppercase tracking-widest text-primary font-semibold mb-3">Web3 Network Infrastructure on BOT Chain</p>
               <h1 className="text-5xl sm:text-6xl font-display font-semibold leading-[1.05] tracking-tight text-text-primary text-left">
                 You built the Agent. <br/><span className="gradient-text-purple">We made it an Asset.</span>
               </h1>
@@ -1047,7 +1047,7 @@ export default function LandingPage() {
           animate={{ x: ['0%', '-50%'] }} transition={{ duration: 12, repeat: Infinity, ease: 'linear' }}>
                   {[...Array(2)].map((_, i) => (
             <div key={i} className="inline-flex items-center gap-6 min-w-full justify-around px-4">
-              {['MCP Protocol', 'iNFT Ownership', 'Delegation Billing', 'Agent Swarms', 'On-chain Access', '0G Storage', '0G Revenue', 'A2A Comms'].map(t => (
+              {['MCP Protocol', 'iNFT Ownership', 'Delegation Billing', 'Agent Swarms', 'On-chain Access', '0G Storage', 'BOT Revenue', 'A2A Comms'].map(t => (
                 <span key={t} className="text-xs font-medium text-text-secondary uppercase tracking-widest flex items-center gap-1.5">
                   <span className="w-1 h-1 rounded-full bg-accent-pink inline-block" />{t}
                 </span>
