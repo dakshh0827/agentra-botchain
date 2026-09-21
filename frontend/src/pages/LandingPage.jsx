@@ -887,9 +887,9 @@ const Footer = () => (
         <div className="flex gap-3 mt-5">
           {[
             { icon: Twitter, href: 'https://x.com/Agentra69', label: 'Twitter' },
-            { icon: Github, href: 'https://github.com/dakshh0827/agentra-0G', label: 'GitHub' },
+            { icon: Github, href: 'https://github.com/dakshh0827/agentra-botchain', label: 'GitHub' },
             { icon: Mail, href: 'https://mail.google.com/mail/?view=cm&fs=1&to=agentra69@gmail.com', label: 'Mail' },
-            { icon: FileText, href: 'https://docs.0g.ai', label: 'Docs' },
+            { icon: FileText, href: 'https://dev-docs.botchain.ai/docs/intro', label: 'Docs' },
           ].map(({ icon: Icon, href, label }) => (
             <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={label}
               className="w-8 h-8 rounded-lg border border-border flex items-center justify-center text-primary hover:border-border-bright hover:text-text-primary transition-colors">
@@ -928,9 +928,9 @@ const Footer = () => (
         <p className="text-xs font-semibold uppercase tracking-widest text-text-dim mb-4">Developers</p>
         <ul className="space-y-2.5">
           {[
-            { name: 'Documentation', href: 'https://docs.0g.ai/' },
-            { name: 'MCP Protocol', href: 'https://modelcontextprotocol.io/docs/getting-started/intro' },
-            { name: '0G Storage', href: 'https://docs.0g.ai/concepts/storage' }
+            { name: 'BOTChain', href: 'https://www.botchain.ai/en', logo: '/logo/botchain.png' },
+            { name: 'BOTChain Explorer', href: 'https://scan.botchain.ai' },
+            { name: 'MCP Protocol', href: 'https://modelcontextprotocol.io/docs/getting-started/intro' }
           ].map(link => (
             <li key={link.name}>
               <a href={link.href} target="_blank" rel="noopener noreferrer" className="text-sm text-text-secondary hover:text-text-primary transition-colors">
