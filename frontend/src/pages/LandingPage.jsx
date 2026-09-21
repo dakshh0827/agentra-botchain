@@ -928,7 +928,7 @@ const Footer = () => (
         <p className="text-xs font-semibold uppercase tracking-widest text-text-dim mb-4">Developers</p>
         <ul className="space-y-2.5">
           {[
-            { name: 'BOTChain', href: 'https://www.botchain.ai/en', logo: '/logo/botchain.png' },
+            { name: 'BOTChain', href: 'https://www.botchain.ai/en', logo: '/logo/botchain.jpg' },
             { name: 'BOTChain Explorer', href: 'https://scan.botchain.ai' },
             { name: 'MCP Protocol', href: 'https://modelcontextprotocol.io/docs/getting-started/intro' }
           ].map(link => (
