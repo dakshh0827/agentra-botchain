@@ -929,11 +929,12 @@ const Footer = () => (
         <ul className="space-y-2.5">
           {[
             { name: 'BOTChain', href: 'https://www.botchain.ai/en', logo: '/logo/botchain.jpg' },
-            { name: 'BOTChain Explorer', href: 'https://scan.botchain.ai' },
+            { name: 'BOTChain Explorer', href: 'https://scan.botchain.ai', logo: '/logo/botchain.jpg' },
             { name: 'MCP Protocol', href: 'https://modelcontextprotocol.io/docs/getting-started/intro' }
           ].map(link => (
             <li key={link.name}>
-              <a href={link.href} target="_blank" rel="noopener noreferrer" className="text-sm text-text-secondary hover:text-text-primary transition-colors">
+              <a href={link.href} target="_blank" rel="noopener noreferrer" className="text-sm text-text-secondary hover:text-text-primary transition-colors inline-flex items-center gap-1.5">
+                {link.logo && <img src={link.logo} alt="" className="w-3.5 h-3.5 rounded-sm object-contain" />}
                 {link.name}
               </a>
             </li>
